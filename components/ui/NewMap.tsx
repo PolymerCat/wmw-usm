@@ -43,16 +43,20 @@ function MapController({
 }
 
 function createIcon(isSelected: boolean) {
+  const pulseColor = isSelected ? "rgba(235,132,35,0.45)" : "rgba(102,49,170,0.35)";
+  const dotColor = isSelected ? "#EB8423" : "#6631AA";
+  const ringColor = isSelected ? "#431A7C" : "#FFFFFF";
+
   return new DivIcon({
     className: "bg-transparent border-none",
     html: `
-      <div class="relative flex items-center justify-center w-8 h-8">
-        <div class="absolute w-full h-full rounded-full opacity-30 animate-ping ${isSelected ? "bg-red-500" : "bg-red-400"}"></div>
-        <div class="relative w-4 h-4 rounded-full shadow-lg ${isSelected ? "bg-blue-600 scale-150 ring-4 ring-white" : "bg-blue-500 ring-2 ring-white"} transition-all duration-300"></div>
+      <div style="position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:34px;">
+        <span style="position:absolute;width:100%;height:100%;border-radius:9999px;background:${pulseColor};animation:markerPulse 1.8s ease-out infinite;"></span>
+        <span style="position:relative;width:${isSelected ? "17px" : "13px"};height:${isSelected ? "17px" : "13px"};border-radius:9999px;background:${dotColor};box-shadow:0 10px 20px -12px rgba(67,26,124,0.9);border:${isSelected ? "4px" : "2px"} solid ${ringColor};transition:all 220ms ease;"></span>
       </div>
     `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
   });
 }
 
@@ -62,7 +66,7 @@ export default function NewMap({
   selectedBuildingId,
 }: NewMapProps) {
   return (
-    <div className="h-screen w-full">
+    <div className="h-dvh w-full">
       <MapContainer
         center={USM_CENTER}
         zoom={17}
