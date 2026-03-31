@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { MapPin, X, Navigation } from 'lucide-react';
-import { Building } from '@/lib/data';
+import type { Building } from '@/lib/types';
 import { MaintenanceBadge, ColdWaterBadge } from './StatusBadge';
 
 interface SidebarProps {
@@ -98,7 +98,7 @@ export default function NewSidebar({ building, onClose }: SidebarProps) {
                     <div className="p-4 space-y-4 pb-24"> {/* Extra bottom padding for the button */}
                         {building.dispensers.map((dispenser) => (
                             <div
-                                key={dispenser.id}
+                                key={`${building.id}:${dispenser.id}`}
                                 className="bg-white border border-slate-200/70 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 group active:bg-slate-50"
                             >
                                 <div className="flex justify-between items-start mb-3">
@@ -110,9 +110,6 @@ export default function NewSidebar({ building, onClose }: SidebarProps) {
                                 <div className="grid grid-cols-2 gap-y-1.5 mb-4 text-sm">
                                     <div className="font-medium text-slate-400">Brand</div>
                                     <div className="font-semibold text-slate-700 text-right">{dispenser.brand}</div>
-
-                                    <div className="font-medium text-slate-400">Model</div>
-                                    <div className="font-semibold text-slate-600 text-right text-xs truncate ml-4">{dispenser.modelName}</div>
                                 </div>
 
                                 <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">

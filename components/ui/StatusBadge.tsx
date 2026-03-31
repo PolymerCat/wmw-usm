@@ -1,5 +1,4 @@
-import React from 'react';
-import { MaintenanceStatus, ColdWaterStatus } from '@/lib/data';
+import type { MaintenanceStatus, ColdWaterStatus } from '@/lib/types';
 import { Wrench, Droplet, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
 
 interface MaintenanceBadgeProps {
