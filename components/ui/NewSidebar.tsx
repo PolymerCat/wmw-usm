@@ -5,6 +5,8 @@ import L from 'leaflet';
 import { MapPin, X, Navigation } from 'lucide-react';
 import { Building } from '@/lib/data';
 import { MaintenanceBadge, ColdWaterBadge } from './StatusBadge';
+import { Droplet } from "lucide-react";
+import position from './UserLocation';
 
 interface SidebarProps {
     building: Building | null;
@@ -40,21 +42,35 @@ export default function NewSidebar({ building, onClose }: SidebarProps) {
         <div
             ref={sidebarRef}
             className={`
-        fixed z-[2000] bottom-0 left-0 
-        w-full md:w-96 
-        h-[65vh] md:h-full 
-        bg-white/95 backdrop-blur-2xl 
-        border-t md:border-l md:border-t-0 border-slate-200 
-        shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)] md:shadow-2xl 
-        transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
-        rounded-t-[32px] md:rounded-t-none
-        ${building ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}
-      `}
+                fixed z-[2000] bottom-0 left-0 
+                w-full md:w-96 
+                h-[65vh] md:h-full 
+                bg-white/95 backdrop-blur-2xl 
+                border-t md:border-l md:border-t-0 border-slate-200 
+                shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)] md:shadow-2xl 
+                transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
+                rounded-t-[32px] md:rounded-t-none
+                ${building ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}
+            `}
         >
             {/* Mobile Drag Handle Cue */}
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 mb-2 md:hidden" />
 
+            {/* WHERES MY WATER? USM */}
             <div className="flex flex-col h-full">
+                <div className=" top-4 mt-4 left-4 md:top-6 md:left-6 z-[1000] flex items-center gap-3  px-4 py-3 rounded-2xl  ">
+                    <div className="bg-blue-500 rounded-xl shadow-inner relative flex items-center justify-center w-10 h-10">
+                        <Droplet className="w-5 h-5 text-white absolute animate-ping opacity-30" />
+                        <Droplet className="w-5 h-5 text-white relative z-10" strokeWidth={2.5} />
+                    </div>
+                    <div>
+                        <h1 className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-cyan-500 text-xl leading-none tracking-tight">
+                            Where's My Water?
+                        </h1>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1 tracking-widest uppercase">USM MAIN CAMPUS</p>
+                    </div>
+                </div>
+
                 {/* Header: Consistent with your style */}
                 <div className="flex items-start justify-between p-6 bg-gradient-to-b from-slate-50 to-white/0 border-b border-slate-100">
                     <div>
@@ -116,7 +132,11 @@ export default function NewSidebar({ building, onClose }: SidebarProps) {
                 {/* Action Footer: Navigation Shortcut */}
                 <div className="absolute bottom-0 left-0 w-full p-4 bg-white/80 backdrop-blur-md border-t border-slate-100 md:relative">
                     <button
-                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${building.latitude},${building.longitude}&travelmode=walking`)}
+                        onClick={() => {
+                            const destination = `${building.latitude},${building.longitude}`;
+                            const url = `https://www.google.com/maps?saddr=Current+Location&daddr=${destination}&directionsmode=walking`;
+                            window.open(url, '_blank');
+                        }}
                         className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-95"
                     >
                         <Navigation className="w-5 h-5 fill-current" />

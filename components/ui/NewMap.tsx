@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css'; // CRITICAL: Without this, the map is broken
 import { BUILDINGS_DATA, Building } from '@/lib/data';
 import { LatLngBoundsExpression, DivIcon } from 'leaflet';
-
+import UserLocationMarker from './UserLocation';
 
 interface NewMapProps {
     onBuildingSelect: (building: Building) => void;
@@ -88,7 +88,7 @@ export default function NewMap({ onBuildingSelect, selectedBuildingId }: NewMapP
 
                 {/* 3. Map Controller for when a building is selected */}
                 <MapController selectedBuildingId={selectedBuildingId} />
-
+                <UserLocationMarker />
                 {/* 4. THE DATA: Mapping through your buildings */}
                 {BUILDINGS_DATA.map((building) => (
                     <Marker

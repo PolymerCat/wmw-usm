@@ -4,6 +4,7 @@ import { Droplet } from "lucide-react";
 import { useState } from 'react';
 import { Building } from '@/lib/data';
 import NewSidebar from "@/components/ui/NewSidebar";
+//import UserLocationMarker from "@/components/ui/UserLocation";
 
 export default function TestPage() {
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
@@ -29,6 +30,7 @@ export default function TestPage() {
           building={selectedBuilding}
           onClose={() => setSelectedBuilding(null)}
         />
+
         <div className="absolute inset-0 z-0">
           <NewMap selectedBuildingId={selectedBuilding?.id || null}
             onBuildingSelect={setSelectedBuilding} />
