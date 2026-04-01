@@ -19,6 +19,7 @@ export default function MapShell({ buildings }: MapShellProps) {
   return (
     <>
       <Sidebar
+        key={selectedBuilding?.id ?? "sidebar-empty"}
         building={selectedBuilding}
         onClose={() => setSelectedBuilding(null)}
       />

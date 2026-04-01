@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, TileLayer, useMap, ZoomControl } from "react-leaflet";
 import { DivIcon, type LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Building } from "@/lib/types";
@@ -71,12 +71,14 @@ export default function Map({
         center={USM_CENTER}
         zoom={17}
         className="h-full w-full"
+        zoomControl={false}
         minZoom={17}
         maxZoom={19}
         maxBounds={USM_BOUNDS}
         maxBoundsViscosity={1.0}
       >
         <TileLayer url="new_tiles/{z}/{x}/{y}.png" />
+        <ZoomControl position="bottomright" />
         <MapController buildings={buildings} selectedBuildingId={selectedBuildingId} />
         {buildings.map((building) => (
           <Marker
