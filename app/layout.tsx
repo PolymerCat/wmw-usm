@@ -27,7 +27,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Where's My Water? | Universiti Sains Malaysia",
+  title: "Where's My Water?",
   description:
     "Professional campus map for locating water refill stations across Universiti Sains Malaysia (USM).",
 };
