@@ -17,6 +17,8 @@ const USM_BOUNDS: LatLngBoundsExpression = [
   [5.351636862846997, 100.2865113240709],
   [5.363583489536974, 100.31088833599742],
 ];
+const MAP_MIN_ZOOM = 17;
+const MAP_MAX_ZOOM = 19;
 
 function MapController({
   buildings,
@@ -31,12 +33,12 @@ function MapController({
     if (selectedBuildingId) {
       const selected = buildings.find((building) => building.id === selectedBuildingId);
       if (selected) {
-        map.flyTo([selected.latitude, selected.longitude], 18, { duration: 1.5 });
+        map.flyTo([selected.latitude, selected.longitude], MAP_MAX_ZOOM, { duration: 1.5 });
         return;
       }
     }
 
-    map.flyTo(USM_CENTER, 17, { duration: 1.5 });
+    map.flyTo(USM_CENTER, MAP_MIN_ZOOM, { duration: 1.5 });
   }, [buildings, map, selectedBuildingId]);
 
   return null;
@@ -69,15 +71,15 @@ export default function Map({
     <div className="h-full min-h-[100svh] w-full">
       <MapContainer
         center={USM_CENTER}
-        zoom={17}
+        zoom={MAP_MIN_ZOOM}
         className="h-full w-full"
         zoomControl={false}
-        minZoom={17}
-        maxZoom={19}
+        minZoom={MAP_MIN_ZOOM}
+        maxZoom={MAP_MAX_ZOOM}
         maxBounds={USM_BOUNDS}
         maxBoundsViscosity={1.0}
       >
-        <TileLayer url="new_tiles/{z}/{x}/{y}.png" />
+        <TileLayer url="new_tiles/{z}/{x}/{y}.png" maxZoom={MAP_MAX_ZOOM} />
         <ZoomControl position="bottomright" />
         <MapController buildings={buildings} selectedBuildingId={selectedBuildingId} />
         {buildings.map((building) => (
