@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, ZoomControl } from "react-leaflet";
-import { DivIcon, type LatLngBoundsExpression } from "leaflet";
+import { DivIcon, type LatLngBoundsExpression, type Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Building } from "@/lib/types";
+
+type LatLng = {
+  lat: number;
+  lng: number;
+};
 
 interface MapProps {
   buildings: Building[];
   onBuildingSelect: (building: Building) => void;
   selectedBuildingId: string | null;
+  userLocation: LatLng | null;
+  onUserLocationChange: (location: LatLng | null) => void;
 }
 
 const USM_CENTER: [number, number] = [5.356174000404129, 100.2989353671396];
@@ -25,11 +32,19 @@ const MOBILE_FOCUS_Y_RATIO = 0.4;
 function MapController({
   buildings,
   selectedBuildingId,
+  userLocation,
+  onMapReady,
 }: {
   buildings: Building[];
   selectedBuildingId: string | null;
+  userLocation: LatLng | null;
+  onMapReady: (map: LeafletMap) => void;
 }) {
   const map = useMap();
+
+  useEffect(() => {
+    onMapReady(map);
+  }, [map, onMapReady]);
 
   useEffect(() => {
     if (selectedBuildingId) {
@@ -54,10 +69,29 @@ function MapController({
       }
     }
 
+    if (userLocation) {
+      map.flyTo([userLocation.lat, userLocation.lng], MAP_MAX_ZOOM, { duration: 1.5 });
+      return;
+    }
+
     map.flyTo(USM_CENTER, MAP_MIN_ZOOM, { duration: 1.5 });
-  }, [buildings, map, selectedBuildingId]);
+  }, [buildings, map, selectedBuildingId, userLocation]);
 
   return null;
+}
+
+function createCurrentLocationIcon() {
+  return new DivIcon({
+    className: "bg-transparent border-none",
+    html: `
+      <div style="position:relative;display:flex;align-items:center;justify-content:center;width:30px;height:30px;">
+        <span style="position:absolute;width:100%;height:100%;border-radius:9999px;background:rgba(60,174,252,0.35);animation:markerPulse 1.6s ease-out infinite;"></span>
+        <span style="position:relative;width:12px;height:12px;border-radius:9999px;background:#3CAEFC;border:2px solid white;box-shadow:0 0 6px rgba(25,150,255,0.8);"></span>
+      </div>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
 }
 
 function createIcon(isSelected: boolean) {
@@ -82,7 +116,57 @@ export default function Map({
   buildings,
   onBuildingSelect,
   selectedBuildingId,
+  userLocation,
+  onUserLocationChange,
 }: MapProps) {
+  const [mapInstance, setMapInstance] = useState<LeafletMap | null>(null);
+  // THIS IS THE MAIN LOGIC FOR AUTO FINDING USER LOCATION
+  const locateUser = () => {
+    if (!navigator.geolocation) {
+      window.alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLocation: LatLng = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        onUserLocationChange(newLocation);
+
+        if (mapInstance) {
+          mapInstance.flyTo([newLocation.lat, newLocation.lng], MAP_MAX_ZOOM, { duration: 1.2 });
+        }
+      },
+      (error) => {
+        console.error("Geolocation error", error);
+        window.alert("Unable to retrieve your location. Please allow location access and try again.");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const [hasAttemptedGeolocation, setHasAttemptedGeolocation] = useState(false);
+
+  useEffect(() => {
+    if (mapInstance && !userLocation && !hasAttemptedGeolocation) {
+      setHasAttemptedGeolocation(true);
+      locateUser();
+    }
+  }, [mapInstance, userLocation, hasAttemptedGeolocation]);
+
+  useEffect(() => {
+    if (userLocation && mapInstance) {
+      mapInstance.flyTo([userLocation.lat, userLocation.lng], MAP_MAX_ZOOM, { duration: 0.9 });
+    }
+  }, [userLocation, mapInstance]);
+
   return (
     <div className="h-full min-h-[100svh] w-full">
       <MapContainer
@@ -97,7 +181,13 @@ export default function Map({
       >
         <TileLayer url="/new_tiles/{z}/{x}/{y}.png" maxZoom={MAP_MAX_ZOOM} />
         <ZoomControl position="bottomright" />
-        <MapController buildings={buildings} selectedBuildingId={selectedBuildingId} />
+        <MapController
+          buildings={buildings}
+          selectedBuildingId={selectedBuildingId}
+          userLocation={userLocation}
+          onMapReady={setMapInstance}
+        />
+
         {buildings.map((building) => (
           <Marker
             key={building.id}
@@ -108,6 +198,13 @@ export default function Map({
             }}
           />
         ))}
+
+        {userLocation && (
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
+            icon={createCurrentLocationIcon()}
+          />
+        )}
       </MapContainer>
     </div>
   );

@@ -15,12 +15,14 @@ interface MapShellProps {
 
 export default function MapShell({ buildings }: MapShellProps) {
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   return (
     <>
       <Sidebar
         key={selectedBuilding?.id ?? "sidebar-empty"}
         building={selectedBuilding}
+        userLocation={userLocation}
         onClose={() => setSelectedBuilding(null)}
       />
       <div className="absolute inset-0 z-0">
@@ -28,6 +30,8 @@ export default function MapShell({ buildings }: MapShellProps) {
           buildings={buildings}
           selectedBuildingId={selectedBuilding?.id ?? null}
           onBuildingSelect={setSelectedBuilding}
+          userLocation={userLocation}
+          onUserLocationChange={setUserLocation}
         />
       </div>
     </>

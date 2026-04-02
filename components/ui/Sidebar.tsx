@@ -8,6 +8,7 @@ import { ColdWaterBadge, MaintenanceBadge } from "./StatusBadge";
 interface SidebarProps {
   building: Building | null;
   onClose: () => void;
+  userLocation: { lat: number; lng: number } | null;
 }
 
 type MobileSnap = "peek" | "half" | "full";
@@ -64,12 +65,12 @@ function buildMetrics(viewportHeight: number): SheetMetrics {
   };
 }
 
-function openDirections(building: Building) {
-  window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${building.latitude},${building.longitude}&travelmode=walking`,
-    "_blank",
-    "noopener,noreferrer"
-  );
+function openDirections(building: Building, userLocation: { lat: number; lng: number } | null) {
+  const destination = `${building.latitude},${building.longitude}`;
+  const origin = userLocation ? `${userLocation.lat},${userLocation.lng}` : "My+Location";
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
+
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function stationCountLabel(building: Building) {
@@ -78,15 +79,17 @@ function stationCountLabel(building: Building) {
 
 function DirectionsButton({
   building,
+  userLocation,
   compact = false,
 }: {
   building: Building;
+  userLocation: { lat: number; lng: number } | null;
   compact?: boolean;
 }) {
   return (
     <button
       type="button"
-      onClick={() => openDirections(building)}
+      onClick={() => openDirections(building, userLocation)}
       className={`group flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-600)] px-4 text-sm font-bold tracking-wide text-white shadow-[0_16px_28px_-20px_rgba(67,26,124,0.9)] transition hover:bg-[var(--brand-700)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-[0.99] md:text-base ${
         compact ? "py-3" : "py-3.5"
       }`}
@@ -132,7 +135,7 @@ function DispenserList({ building }: { building: Building }) {
   );
 }
 
-export default function Sidebar({ building, onClose }: SidebarProps) {
+export default function Sidebar({ building, onClose, userLocation }: SidebarProps) {
   const [mobileSnap, setMobileSnap] = useState<MobileSnap>(DEFAULT_SNAP);
   const [metrics, setMetrics] = useState<SheetMetrics>(DEFAULT_METRICS);
   const [dragTranslate, setDragTranslate] = useState<number | null>(null);
@@ -345,7 +348,7 @@ export default function Sidebar({ building, onClose }: SidebarProps) {
                   {stationCountLabel(building)}
                 </p>
                 <div className="mt-3">
-                  <DirectionsButton building={building} compact />
+                  <DirectionsButton building={building} userLocation={userLocation} compact />
                 </div>
               </div>
               <button
@@ -400,7 +403,7 @@ export default function Sidebar({ building, onClose }: SidebarProps) {
           </div>
 
           <div className="absolute right-0 bottom-0 left-0 border-t border-[#d8cdea] bg-white p-5">
-            <DirectionsButton building={building} />
+            <DirectionsButton building={building} userLocation={userLocation} />
           </div>
         </div>
       </aside>
