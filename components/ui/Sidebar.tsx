@@ -87,11 +87,11 @@ function DirectionsButton({
     <button
       type="button"
       onClick={() => openDirections(building)}
-      className={`group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--brand-600)] to-[var(--brand-500)] px-4 text-sm font-bold tracking-wide text-white shadow-[0_16px_28px_-20px_rgba(67,26,124,0.9)] transition hover:from-[var(--brand-700)] hover:to-[var(--brand-600)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-[0.99] md:text-base ${
+      className={`group flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-600)] px-4 text-sm font-bold tracking-wide text-white shadow-[0_16px_28px_-20px_rgba(67,26,124,0.9)] transition hover:bg-[var(--brand-700)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-[0.99] md:text-base ${
         compact ? "py-3" : "py-3.5"
       }`}
     >
-      <Navigation className="h-4 w-4 text-[var(--accent-500)] transition group-hover:text-[var(--accent-500)]" />
+      <Navigation className="h-4 w-4 text-white/90 transition group-hover:text-white" />
       Get Walking Directions
     </button>
   );

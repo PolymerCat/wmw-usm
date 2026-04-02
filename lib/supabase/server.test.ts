@@ -26,6 +26,8 @@ describe("createSupabaseServerClient", () => {
   it("logs redacted env status and throws a safe config error when env vars are missing", () => {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_ANON_KEY;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(() => createSupabaseServerClient()).toThrow(
