@@ -3,9 +3,9 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import type { Building } from "@/lib/types";
-import NewSidebar from "@/components/ui/NewSidebar";
+import Sidebar from "@/components/ui/Sidebar";
 
-const NewMap = dynamic(() => import("@/components/ui/NewMap"), {
+const Map = dynamic(() => import("@/components/ui/Map"), {
   ssr: false,
 });
 
@@ -18,12 +18,13 @@ export default function MapShell({ buildings }: MapShellProps) {
 
   return (
     <>
-      <NewSidebar
+      <Sidebar
+        key={selectedBuilding?.id ?? "sidebar-empty"}
         building={selectedBuilding}
         onClose={() => setSelectedBuilding(null)}
       />
       <div className="absolute inset-0 z-0">
-        <NewMap
+        <Map
           buildings={buildings}
           selectedBuildingId={selectedBuilding?.id ?? null}
           onBuildingSelect={setSelectedBuilding}

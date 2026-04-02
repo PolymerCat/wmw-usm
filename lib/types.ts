@@ -1,5 +1,9 @@
 export type ColdWaterStatus = "Available" | "Unavailable" | "Unknown";
-export type MaintenanceStatus = "Operational" | "Under Maintenance" | "Broken";
+export type MaintenanceStatus =
+  | "Operational"
+  | "Under Maintenance"
+  | "Broken"
+  | "Unknown";
 
 export interface Dispenser {
   id: string;

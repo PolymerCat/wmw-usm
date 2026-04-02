@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cache } from "react";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Building, ColdWaterStatus, MaintenanceStatus } from "@/lib/types";
 
@@ -21,6 +21,9 @@ type BuildingRow = {
   dispensers: DispenserRow[] | null;
 };
 
+export const BUILDINGS_LOAD_ERROR_MESSAGE =
+  "Unable to load water refill data right now.";
+
 function toColdWaterStatus(value: string): ColdWaterStatus {
   if (value === "Available" || value === "Unavailable" || value === "Unknown") {
     return value;
@@ -33,15 +36,16 @@ function toMaintenanceStatus(value: string): MaintenanceStatus {
   if (
     value === "Operational" ||
     value === "Under Maintenance" ||
-    value === "Broken"
+    value === "Broken" ||
+    value === "Unknown"
   ) {
     return value;
   }
 
-  return "Broken";
+  return "Unknown";
 }
 
-export const getBuildings = cache(async (): Promise<Building[]> => {
+export async function getBuildings(): Promise<Building[]> {
   const supabase = createSupabaseServerClient();
 
   const { data, error } = await supabase
@@ -52,7 +56,16 @@ export const getBuildings = cache(async (): Promise<Building[]> => {
     .order("name");
 
   if (error) {
-    throw new Error(`Failed to load buildings from Supabase: ${error.message}`);
+    const typedError = error as PostgrestError | null;
+    console.error("[wmw-usm]", {
+      area: "data",
+      operation: "get_buildings_query",
+      message: typedError?.message ?? "Unknown Supabase error",
+      code: typedError?.code ?? null,
+      hint: typedError?.hint ?? null,
+      details: typedError?.details ?? null,
+    });
+    throw new Error(BUILDINGS_LOAD_ERROR_MESSAGE);
   }
 
   const rows = (data ?? []) as BuildingRow[];
@@ -71,4 +84,4 @@ export const getBuildings = cache(async (): Promise<Building[]> => {
       maintenanceStatus: toMaintenanceStatus(dispenser.maintenance_status),
     })),
   }));
-});
+}

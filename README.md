@@ -34,3 +34,17 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Error Handling and Testing
+
+- Runtime failures are surfaced through `app/error.tsx` with a retry action.
+- Server-side diagnostics are logged via structured `console.error` entries.
+- Baseline smoke tests run with Vitest + React Testing Library.
+
+### Verification Commands
+
+```bash
+npm run lint
+npm run test
+npm run build
+```
