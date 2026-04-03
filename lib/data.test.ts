@@ -22,7 +22,16 @@ function makeClient(result: QueryResult) {
   const order = vi.fn().mockResolvedValue(result);
   const select = vi.fn().mockReturnValue({ order });
   const from = vi.fn().mockReturnValue({ select });
-  return { from };
+  const getPublicUrl = vi.fn((path: string) => ({
+    data: { publicUrl: `https://cdn.test/${path}` },
+  }));
+  const storageFrom = vi.fn().mockReturnValue({ getPublicUrl });
+  return {
+    from,
+    storage: {
+      from: storageFrom,
+    },
+  };
 }
 
 describe("getBuildings", () => {
@@ -52,6 +61,7 @@ describe("getBuildings", () => {
               brand: "Cuckoo",
               cold_water_status: "Available",
               maintenance_status: "Operational",
+              image_path: "bld-1/dsp-1/sample.jpg",
             },
           ],
         },
@@ -76,6 +86,8 @@ describe("getBuildings", () => {
             brand: "Cuckoo",
             coldWaterStatus: "Available",
             maintenanceStatus: "Operational",
+            imagePath: "bld-1/dsp-1/sample.jpg",
+            imageUrl: "https://cdn.test/bld-1/dsp-1/sample.jpg",
           },
         ],
       },
@@ -99,6 +111,7 @@ describe("getBuildings", () => {
               brand: "Coway",
               cold_water_status: "Available",
               maintenance_status: "Out of service",
+              image_path: null,
             },
           ],
         },
