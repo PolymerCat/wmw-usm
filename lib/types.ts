@@ -25,6 +25,8 @@ export interface Dispenser {
   brand: string;
   coldWaterStatus: ColdWaterStatus;
   maintenanceStatus: MaintenanceStatus;
+  imagePath?: string;
+  imageUrl?: string;
 }
 
 export interface Building {
@@ -71,6 +73,10 @@ export interface UpdateBuildingPinPayload {
 export interface MutationResult {
   ok: boolean;
   message: string;
+}
+
+export interface CreateDispenserResult extends MutationResult {
+  dispenserId?: string;
 }
 
 export interface CreateBuildingResult extends MutationResult {

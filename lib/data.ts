@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
+import { DISPENSER_IMAGE_BUCKET } from "@/lib/dispenser-images";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Building, ColdWaterStatus, MaintenanceStatus } from "@/lib/types";
 
@@ -11,6 +12,7 @@ type DispenserRow = {
   brand: string;
   cold_water_status: string;
   maintenance_status: string;
+  image_path: string | null;
 };
 
 type BuildingRow = {
@@ -51,7 +53,7 @@ export async function getBuildings(): Promise<Building[]> {
   const { data, error } = await supabase
     .from("buildings")
     .select(
-      "id,name,latitude,longitude,dispensers(building_id,dispenser_id,location_description,brand,cold_water_status,maintenance_status)"
+      "id,name,latitude,longitude,dispensers(building_id,dispenser_id,location_description,brand,cold_water_status,maintenance_status,image_path)"
     )
     .order("name");
 
@@ -75,13 +77,23 @@ export async function getBuildings(): Promise<Building[]> {
     name: building.name,
     latitude: building.latitude,
     longitude: building.longitude,
-    dispensers: (building.dispensers ?? []).map((dispenser) => ({
-      id: dispenser.dispenser_id,
-      buildingId: dispenser.building_id,
-      locationDescription: dispenser.location_description,
-      brand: dispenser.brand,
-      coldWaterStatus: toColdWaterStatus(dispenser.cold_water_status),
-      maintenanceStatus: toMaintenanceStatus(dispenser.maintenance_status),
-    })),
+    dispensers: (building.dispensers ?? []).map((dispenser) => {
+      const imagePath = dispenser.image_path ?? undefined;
+      const imageUrl = imagePath
+        ? supabase.storage.from(DISPENSER_IMAGE_BUCKET).getPublicUrl(imagePath).data
+            .publicUrl
+        : undefined;
+
+      return {
+        id: dispenser.dispenser_id,
+        buildingId: dispenser.building_id,
+        locationDescription: dispenser.location_description,
+        brand: dispenser.brand,
+        coldWaterStatus: toColdWaterStatus(dispenser.cold_water_status),
+        maintenanceStatus: toMaintenanceStatus(dispenser.maintenance_status),
+        imagePath,
+        imageUrl,
+      };
+    }),
   }));
 }

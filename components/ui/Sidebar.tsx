@@ -108,6 +108,18 @@ function DispenserList({ building }: { building: Building }) {
           key={`${building.id}:${dispenser.id}`}
           className="rounded-2xl border border-[#d8cdea] bg-white px-4 py-4 shadow-[0_14px_28px_-30px_rgba(67,26,124,0.65)] transition hover:border-[#b79adf] md:px-5"
         >
+          {dispenser.imageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={dispenser.imageUrl}
+              alt={`${dispenser.locationDescription} dispenser`}
+              className="mb-3 aspect-square w-full rounded-xl border border-[#e2d8f0] object-cover"
+            />
+          ) : (
+            <div className="mb-3 flex aspect-square w-full items-center justify-center rounded-xl border border-dashed border-[#d8cdea] bg-[#f8f3ff] text-xs font-semibold tracking-wide text-[#6c5f84] uppercase">
+              No Image
+            </div>
+          )}
           <h3 className="text-lg leading-snug font-bold text-[#281947] md:text-xl">
             {dispenser.locationDescription}
           </h3>
@@ -366,6 +378,10 @@ export default function Sidebar({ building, onClose, userLocation }: SidebarProp
           {!isPeek && (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <DispenserList building={building} />
+              <div
+                aria-hidden="true"
+                style={{ height: `${Math.max(0, effectiveTranslate)}px` }}
+              />
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -15,10 +16,16 @@ import {
   createBuilding,
   createDispenser,
   deleteDispenser,
+  removeDispenserImage,
   signOutAdmin,
+  uploadDispenserImage,
   updateBuildingPin,
   updateDispenser,
 } from "@/app/admin/actions";
+import {
+  DISPENSER_IMAGE_ALLOWED_MIME_TYPES,
+  DISPENSER_IMAGE_MAX_BYTES,
+} from "@/lib/dispenser-images";
 import { MAINTENANCE_WRITE_OPTIONS } from "@/lib/admin/payload";
 import {
   COLD_WATER_STATUS_OPTIONS,
@@ -42,6 +49,9 @@ type EditDraft = {
   dispenserId: string;
   fields: DispenserMutationFields;
   original: DispenserMutationFields;
+  hasImage: boolean;
+  imageFile: File | null;
+  removeImage: boolean;
 };
 
 type PinWorkflow = "edit-existing" | "add-new";
@@ -52,6 +62,24 @@ const DISCARD_NEW_BUILDING_DRAFT_MESSAGE =
   "Discard unsaved new building draft? Your building name and pinned coordinates will be lost.";
 const DEFAULT_MUTATION_ERROR_MESSAGE =
   "Something went wrong while saving. Please try again.";
+const IMAGE_INPUT_ACCEPT = DISPENSER_IMAGE_ALLOWED_MIME_TYPES.join(",");
+const IMAGE_MAX_MB = Math.floor(DISPENSER_IMAGE_MAX_BYTES / (1024 * 1024));
+
+function validateImageFile(file: File): string | null {
+  if (
+    !DISPENSER_IMAGE_ALLOWED_MIME_TYPES.includes(
+      file.type as (typeof DISPENSER_IMAGE_ALLOWED_MIME_TYPES)[number]
+    )
+  ) {
+    return "Unsupported image format. Use JPEG, PNG, or WEBP.";
+  }
+
+  if (file.size > DISPENSER_IMAGE_MAX_BYTES) {
+    return `Image size must be ${IMAGE_MAX_MB} MB or less.`;
+  }
+
+  return null;
+}
 
 function initialFields(): DispenserMutationFields {
   return {
@@ -105,11 +133,13 @@ export default function AdminDashboard({
 }: AdminDashboardProps) {
   const router = useRouter();
   const editLocationInputRef = useRef<HTMLInputElement | null>(null);
+  const newImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(
     buildings[0]?.id ?? null
   );
   const [newFields, setNewFields] = useState<DispenserMutationFields>(initialFields);
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [pinWorkflow, setPinWorkflow] = useState<PinWorkflow>("edit-existing");
   const [newBuildingName, setNewBuildingName] = useState("");
@@ -130,7 +160,11 @@ export default function AdminDashboard({
       return false;
     }
 
-    return !areDispenserFieldsEqual(editDraft.fields, editDraft.original);
+    return (
+      !areDispenserFieldsEqual(editDraft.fields, editDraft.original) ||
+      Boolean(editDraft.imageFile) ||
+      editDraft.removeImage
+    );
   }, [editDraft]);
 
   const isAddBuildingDraftDirty =
@@ -179,10 +213,20 @@ export default function AdminDashboard({
           onSuccess?.();
           router.refresh();
         } catch (error) {
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : typeof error === "object" &&
+                  error !== null &&
+                  "message" in error &&
+                  typeof (error as { message?: unknown }).message === "string"
+                ? (error as { message: string }).message
+                : "Unknown error";
+
           console.error("[wmw-usm]", {
             area: "admin_dashboard",
             operation: "run_mutation",
-            message: error instanceof Error ? error.message : "Unknown error",
+            message: errorMessage,
           });
           setMessage("error", DEFAULT_MUTATION_ERROR_MESSAGE);
         }
@@ -247,16 +291,65 @@ export default function AdminDashboard({
       setMessage("error", "Select a building before adding a dispenser.");
       return;
     }
+    const buildingId = selectedBuildingId;
 
     const payload: CreateDispenserPayload = {
-      buildingId: selectedBuildingId,
+      buildingId,
       ...newFields,
       maintenanceStatus: normalizeMaintenanceStatus(newFields.maintenanceStatus),
     };
 
-    runMutation(() => createDispenser(payload), () => {
-      setNewFields(initialFields());
-    });
+    const selectedImage = newImageFile;
+    if (selectedImage) {
+      const imageValidationMessage = validateImageFile(selectedImage);
+      if (imageValidationMessage) {
+        setMessage("error", imageValidationMessage);
+        return;
+      }
+    }
+
+    runMutation(
+      async () => {
+        const createResult = await createDispenser(payload);
+        if (!createResult.ok) {
+          return createResult;
+        }
+
+        if (!selectedImage) {
+          return createResult;
+        }
+
+        if (!createResult.dispenserId) {
+          return {
+            ok: false,
+            message:
+              "Dispenser was created, but image upload could not start. Please edit dispenser and upload image.",
+          };
+        }
+
+        const imageFormData = new FormData();
+        imageFormData.append("buildingId", buildingId);
+        imageFormData.append("dispenserId", createResult.dispenserId);
+        imageFormData.append("image", selectedImage);
+
+        const imageResult = await uploadDispenserImage(imageFormData);
+        if (!imageResult.ok) {
+          return imageResult;
+        }
+
+        return {
+          ok: true,
+          message: "Dispenser and image saved successfully.",
+        };
+      },
+      () => {
+        setNewFields(initialFields());
+        setNewImageFile(null);
+        if (newImageInputRef.current) {
+          newImageInputRef.current.value = "";
+        }
+      }
+    );
   };
 
   const handleStartEdit = (dispenser: Dispenser) => {
@@ -273,6 +366,9 @@ export default function AdminDashboard({
       dispenserId: dispenser.id,
       fields: nextFields,
       original: nextFields,
+      hasImage: Boolean(dispenser.imagePath),
+      imageFile: null,
+      removeImage: false,
     });
   };
 
@@ -286,19 +382,68 @@ export default function AdminDashboard({
       setMessage("error", "Pick a dispenser to update.");
       return;
     }
+    const buildingId = selectedBuildingId;
 
     const maintenanceStatus = normalizeMaintenanceStatus(
       editDraft.fields.maintenanceStatus
     );
+    const replacementImage = editDraft.imageFile;
+    const shouldRemoveImage = editDraft.removeImage;
+
+    if (replacementImage) {
+      const imageValidationMessage = validateImageFile(replacementImage);
+      if (imageValidationMessage) {
+        setMessage("error", imageValidationMessage);
+        return;
+      }
+    }
 
     runMutation(
-      () =>
-        updateDispenser({
-          buildingId: selectedBuildingId,
+      async () => {
+        const updateResult = await updateDispenser({
+          buildingId,
           dispenserId,
           ...editDraft.fields,
           maintenanceStatus,
-        }),
+        });
+
+        if (!updateResult.ok) {
+          return updateResult;
+        }
+
+        if (shouldRemoveImage) {
+          const removeResult = await removeDispenserImage({
+            buildingId,
+            dispenserId,
+          });
+
+          if (!removeResult.ok) {
+            return removeResult;
+          }
+        }
+
+        if (replacementImage) {
+          const imageFormData = new FormData();
+          imageFormData.append("buildingId", buildingId);
+          imageFormData.append("dispenserId", dispenserId);
+          imageFormData.append("image", replacementImage);
+
+          const uploadResult = await uploadDispenserImage(imageFormData);
+          if (!uploadResult.ok) {
+            return uploadResult;
+          }
+        }
+
+        if (replacementImage) {
+          return { ok: true, message: "Dispenser updated and image replaced." };
+        }
+
+        if (shouldRemoveImage) {
+          return { ok: true, message: "Dispenser updated and image removed." };
+        }
+
+        return updateResult;
+      },
       () => {
         setEditDraft(null);
       }
@@ -307,6 +452,51 @@ export default function AdminDashboard({
 
   const handleCancelEdit = () => {
     setEditDraft(null);
+  };
+
+  const handleNewImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setNewImageFile(file);
+  };
+
+  const handleEditImageChange = (
+    event: ChangeEvent<HTMLInputElement>,
+    dispenserId: string
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    setEditDraft((current) =>
+      current && current.dispenserId === dispenserId
+        ? {
+            ...current,
+            imageFile: file,
+            removeImage: file ? false : current.removeImage,
+          }
+        : current
+    );
+  };
+
+  const handleToggleEditImageRemoval = (dispenserId: string) => {
+    setEditDraft((current) => {
+      if (!current || current.dispenserId !== dispenserId) {
+        return current;
+      }
+
+      if (current.imageFile) {
+        return {
+          ...current,
+          imageFile: null,
+        };
+      }
+
+      if (!current.hasImage) {
+        return current;
+      }
+
+      return {
+        ...current,
+        removeImage: !current.removeImage,
+      };
+    });
   };
 
   const handleEditKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
@@ -694,6 +884,31 @@ export default function AdminDashboard({
                       </option>
                     ))}
                   </select>
+                  <div className="rounded-xl border border-dashed border-[#d4c6e8] bg-[#faf7ff] px-3 py-2.5">
+                    <label
+                      htmlFor="new-dispenser-image"
+                      className="mb-1 block text-xs font-semibold tracking-wide text-[#4a2d76] uppercase"
+                    >
+                      Dispenser Image (Optional)
+                    </label>
+                    <input
+                      id="new-dispenser-image"
+                      ref={newImageInputRef}
+                      type="file"
+                      accept={IMAGE_INPUT_ACCEPT}
+                      onChange={handleNewImageChange}
+                      aria-label="Upload image for new dispenser"
+                      className="w-full text-sm text-[#4a3a66] file:mr-3 file:rounded-lg file:border-0 file:bg-[#efe6fd] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#4a2d76] hover:file:bg-[#e2d4fb]"
+                    />
+                    <p className="mt-1 text-xs text-[#6c5f84]">
+                      JPEG, PNG, or WEBP up to {IMAGE_MAX_MB} MB.
+                    </p>
+                    {newImageFile ? (
+                      <p className="mt-1 text-xs font-medium text-[#2f5b45]">
+                        Selected: {newImageFile.name}
+                      </p>
+                    ) : null}
+                  </div>
                   <button
                     type="submit"
                     disabled={!selectedBuilding || isPending}
@@ -723,6 +938,18 @@ export default function AdminDashboard({
                     const isEditing = editDraft?.dispenserId === dispenser.id;
 
                     if (isEditing && editDraft) {
+                      const currentImageUrl =
+                        !editDraft.removeImage && !editDraft.imageFile
+                          ? dispenser.imageUrl ?? null
+                          : null;
+                      const removeButtonLabel = editDraft.imageFile
+                        ? "Clear Selected Image"
+                        : editDraft.removeImage
+                          ? "Undo Remove Image"
+                          : "Remove Image";
+                      const canManageImage =
+                        editDraft.hasImage || Boolean(editDraft.imageFile) || editDraft.removeImage;
+
                       return (
                         <article
                           key={`${selectedBuilding.id}:${dispenser.id}`}
@@ -825,6 +1052,53 @@ export default function AdminDashboard({
                                 </option>
                               ))}
                             </select>
+                            <div className="rounded-lg border border-dashed border-[#ccb7e8] bg-white px-3 py-2">
+                              {currentImageUrl ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={currentImageUrl}
+                                  alt={`${dispenser.locationDescription} dispenser`}
+                                  className="mb-2 h-24 w-full rounded-md border border-[#d8cdea] object-cover"
+                                />
+                              ) : null}
+                              {editDraft.removeImage ? (
+                                <p className="mb-2 text-xs font-medium text-[#912b35]">
+                                  Image will be removed after save.
+                                </p>
+                              ) : null}
+                              {editDraft.imageFile ? (
+                                <p className="mb-2 text-xs font-medium text-[#2f5b45]">
+                                  New image: {editDraft.imageFile.name}
+                                </p>
+                              ) : null}
+                              {!currentImageUrl &&
+                              !editDraft.removeImage &&
+                              !editDraft.imageFile ? (
+                                <p className="mb-2 text-xs text-[#6c5f84]">
+                                  No image uploaded yet.
+                                </p>
+                              ) : null}
+                              <input
+                                type="file"
+                                accept={IMAGE_INPUT_ACCEPT}
+                                onChange={(event) =>
+                                  handleEditImageChange(event, dispenser.id)
+                                }
+                                aria-label={`Replace image for ${dispenser.locationDescription}`}
+                                className="w-full text-sm text-[#4a3a66] file:mr-3 file:rounded-lg file:border-0 file:bg-[#efe6fd] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#4a2d76] hover:file:bg-[#e2d4fb]"
+                              />
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleEditImageRemoval(dispenser.id)}
+                                  disabled={!canManageImage || isPending}
+                                  aria-label={`Toggle image removal for ${dispenser.locationDescription}`}
+                                  className="rounded-lg border border-[#d4c6e8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4a2d76] transition hover:border-[#b79adf] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {removeButtonLabel}
+                                </button>
+                              </div>
+                            </div>
 
                             <div className="mt-3 flex flex-wrap gap-2">
                               <button
@@ -864,6 +1138,18 @@ export default function AdminDashboard({
                         key={`${selectedBuilding.id}:${dispenser.id}`}
                         className="rounded-xl border border-[#dfd3ef] bg-[#fcfbff] p-3"
                       >
+                        {dispenser.imageUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={dispenser.imageUrl}
+                            alt={`${dispenser.locationDescription} dispenser`}
+                            className="mb-2 h-24 w-full rounded-lg border border-[#d8cdea] object-cover"
+                          />
+                        ) : (
+                          <div className="mb-2 flex h-24 w-full items-center justify-center rounded-lg border border-dashed border-[#d8cdea] bg-[#f6f0ff] text-xs font-medium text-[#6c5f84]">
+                            No image uploaded
+                          </div>
+                        )}
                         <h3 className="font-semibold text-[#2f2050]">
                           {dispenser.locationDescription}
                         </h3>

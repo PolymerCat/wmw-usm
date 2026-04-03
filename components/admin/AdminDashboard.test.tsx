@@ -51,12 +51,21 @@ vi.mock("@/app/admin/actions", () => ({
   createDispenser: vi.fn().mockResolvedValue({
     ok: true,
     message: "created",
+    dispenserId: "dsp-created",
   }),
   deleteDispenser: vi.fn().mockResolvedValue({
     ok: true,
     message: "deleted",
   }),
+  removeDispenserImage: vi.fn().mockResolvedValue({
+    ok: true,
+    message: "image removed",
+  }),
   signOutAdmin: vi.fn(),
+  uploadDispenserImage: vi.fn().mockResolvedValue({
+    ok: true,
+    message: "image uploaded",
+  }),
   updateBuildingPin: vi.fn().mockResolvedValue({
     ok: true,
     message: "pin updated",
@@ -81,6 +90,8 @@ const BUILDINGS = [
         brand: "Coway",
         coldWaterStatus: "Available" as const,
         maintenanceStatus: "Operational" as const,
+        imagePath: "bld-1/dsp-1/first.jpg",
+        imageUrl: "https://cdn.test/bld-1/dsp-1/first.jpg",
       },
       {
         id: "dsp-2",
@@ -159,6 +170,71 @@ describe("AdminDashboard inline editing and pin workflows", () => {
       expect(
         screen.queryAllByLabelText("Edit location for 1st Floor Pantry")
       ).toHaveLength(0);
+    });
+  });
+
+  it("uploads image after creating dispenser when file is selected", async () => {
+    const createDispenserMock = vi.mocked(adminActions.createDispenser);
+    const uploadDispenserImageMock = vi.mocked(adminActions.uploadDispenserImage);
+
+    render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
+
+    const file = new File(["image"], "new.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Upload image for new dispenser"), {
+      target: { files: [file] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add Dispenser" }));
+
+    await waitFor(() => {
+      expect(createDispenserMock).toHaveBeenCalledTimes(1);
+      expect(uploadDispenserImageMock).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = uploadDispenserImageMock.mock.calls[0]?.[0];
+    expect(formData).toBeInstanceOf(FormData);
+    expect(formData?.get("buildingId")).toBe("bld-1");
+    expect(formData?.get("dispenserId")).toBe("dsp-created");
+    expect(formData?.get("image")).toBe(file);
+  });
+
+  it("uploads replacement image from inline edit", async () => {
+    const uploadDispenserImageMock = vi.mocked(adminActions.uploadDispenserImage);
+
+    render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
+
+    fireEvent.click(screen.getAllByLabelText("Edit dispenser 1st Floor Pantry")[0]);
+    const file = new File(["replacement"], "replace.webp", { type: "image/webp" });
+    fireEvent.change(screen.getByLabelText("Replace image for 1st Floor Pantry"), {
+      target: { files: [file] },
+    });
+    fireEvent.click(screen.getByLabelText("Save updates for 1st Floor Pantry"));
+
+    await waitFor(() => {
+      expect(uploadDispenserImageMock).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = uploadDispenserImageMock.mock.calls[0]?.[0];
+    expect(formData?.get("buildingId")).toBe("bld-1");
+    expect(formData?.get("dispenserId")).toBe("dsp-1");
+    expect(formData?.get("image")).toBe(file);
+  });
+
+  it("removes existing image from inline edit", async () => {
+    const removeDispenserImageMock = vi.mocked(adminActions.removeDispenserImage);
+
+    render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
+
+    fireEvent.click(screen.getAllByLabelText("Edit dispenser 1st Floor Pantry")[0]);
+    fireEvent.click(
+      screen.getByLabelText("Toggle image removal for 1st Floor Pantry")
+    );
+    fireEvent.click(screen.getByLabelText("Save updates for 1st Floor Pantry"));
+
+    await waitFor(() => {
+      expect(removeDispenserImageMock).toHaveBeenCalledWith({
+        buildingId: "bld-1",
+        dispenserId: "dsp-1",
+      });
     });
   });
 
