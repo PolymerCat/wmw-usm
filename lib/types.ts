@@ -25,8 +25,8 @@ export interface Dispenser {
   brand: string;
   coldWaterStatus: ColdWaterStatus;
   maintenanceStatus: MaintenanceStatus;
-  imagePath?: string;
-  imageUrl?: string;
+  imagePaths: string[];
+  imageUrls: string[];
 }
 
 export interface Building {

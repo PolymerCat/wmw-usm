@@ -24,6 +24,7 @@ import {
 import {
   DISPENSER_IMAGE_BUCKET,
   DISPENSER_IMAGE_MAX_BYTES,
+  DISPENSER_IMAGE_MAX_COUNT,
   buildDispenserImagePath,
   getDispenserImageExtension,
 } from "@/lib/dispenser-images";
@@ -37,6 +38,7 @@ const IMAGE_REQUIRED_MESSAGE = "Please choose an image file.";
 const IMAGE_TYPE_MESSAGE =
   "Unsupported image format. Use JPEG, PNG, or WEBP.";
 const IMAGE_SIZE_MESSAGE = "Image size must be 5 MB or less.";
+const IMAGE_COUNT_MESSAGE = `Maximum ${DISPENSER_IMAGE_MAX_COUNT} images are allowed per dispenser.`;
 
 function success(message: string): MutationResult {
   return { ok: true, message };
@@ -68,10 +70,10 @@ async function fetchDispenserImagePath(
   supabase: Awaited<ReturnType<typeof createSupabaseServerActionClient>>,
   buildingId: string,
   dispenserId: string
-): Promise<{ ok: true; imagePath: string | null } | { ok: false; message: string }> {
+): Promise<{ ok: true; imagePaths: string[] } | { ok: false; message: string }> {
   const { data, error } = await supabase
     .from("dispensers")
-    .select("image_path")
+    .select("image_paths,image_path")
     .eq("building_id", buildingId)
     .eq("dispenser_id", dispenserId)
     .maybeSingle();
@@ -91,10 +93,18 @@ async function fetchDispenserImagePath(
     return { ok: false, message: DISPENSER_NOT_FOUND_MESSAGE };
   }
 
-  const row = data as { image_path?: unknown };
+  const row = data as { image_paths?: unknown; image_path?: unknown };
+  const imagePaths = Array.isArray(row.image_paths)
+    ? row.image_paths.filter(
+        (value): value is string => typeof value === "string" && value.length > 0
+      )
+    : typeof row.image_path === "string" && row.image_path.length > 0
+      ? [row.image_path]
+      : [];
+
   return {
     ok: true,
-    imagePath: typeof row.image_path === "string" ? row.image_path : null,
+    imagePaths,
   };
 }
 
@@ -223,7 +233,7 @@ export async function deleteDispenser(
     .delete()
     .eq("building_id", buildingId.value)
     .eq("dispenser_id", dispenserId.value)
-    .select("dispenser_id,image_path");
+    .select("dispenser_id,image_paths,image_path");
 
   if (error) {
     console.error("[wmw-usm]", {
@@ -243,18 +253,30 @@ export async function deleteDispenser(
   const imagePaths = data
     .map((row) => {
       if (!row || typeof row !== "object") {
-        return null;
+        return [] as string[];
       }
 
-      const value = (row as { image_path?: unknown }).image_path;
-      return typeof value === "string" ? value : null;
-    })
-    .filter((value): value is string => Boolean(value));
+      const typedRow = row as {
+        image_paths?: unknown;
+        image_path?: unknown;
+      };
+      if (Array.isArray(typedRow.image_paths)) {
+        return typedRow.image_paths.filter(
+          (value): value is string => typeof value === "string" && value.length > 0
+        );
+      }
 
-  if (imagePaths.length > 0) {
+      return typeof typedRow.image_path === "string" && typedRow.image_path.length > 0
+        ? [typedRow.image_path]
+        : [];
+    })
+    .flat();
+  const uniqueImagePaths = [...new Set(imagePaths)];
+
+  if (uniqueImagePaths.length > 0) {
     const { error: storageError } = await supabase.storage
       .from(DISPENSER_IMAGE_BUCKET)
-      .remove(imagePaths);
+      .remove(uniqueImagePaths);
 
     if (storageError) {
       console.error("[wmw-usm]", {
@@ -284,18 +306,33 @@ export async function uploadDispenserImage(
     return failure(dispenserId.message);
   }
 
-  const imageFile = formData.get("image");
-  if (!(imageFile instanceof File)) {
+  const imageFiles = formData
+    .getAll("images")
+    .filter((value): value is File => value instanceof File);
+  const legacyImage = formData.get("image");
+  const filesToUpload =
+    imageFiles.length > 0
+      ? imageFiles
+      : legacyImage instanceof File
+        ? [legacyImage]
+        : [];
+
+  if (filesToUpload.length === 0) {
     return failure(IMAGE_REQUIRED_MESSAGE);
   }
 
-  if (imageFile.size > DISPENSER_IMAGE_MAX_BYTES) {
-    return failure(IMAGE_SIZE_MESSAGE);
-  }
+  const validatedImages: Array<{ file: File; extension: string }> = [];
+  for (const imageFile of filesToUpload) {
+    if (imageFile.size > DISPENSER_IMAGE_MAX_BYTES) {
+      return failure(IMAGE_SIZE_MESSAGE);
+    }
 
-  const extension = getDispenserImageExtension(imageFile.type);
-  if (!extension) {
-    return failure(IMAGE_TYPE_MESSAGE);
+    const extension = getDispenserImageExtension(imageFile.type);
+    if (!extension) {
+      return failure(IMAGE_TYPE_MESSAGE);
+    }
+
+    validatedImages.push({ file: imageFile, extension });
   }
 
   const { supabase, guard } = await ensureAdmin();
@@ -312,33 +349,59 @@ export async function uploadDispenserImage(
     return currentImage;
   }
 
-  const imagePath = buildDispenserImagePath(
-    buildingId.value,
-    dispenserId.value,
-    extension
-  );
-  const { error: uploadError } = await supabase.storage
-    .from(DISPENSER_IMAGE_BUCKET)
-    .upload(imagePath, imageFile, {
-      contentType: imageFile.type,
-      upsert: false,
-    });
-
-  if (uploadError) {
-    console.error("[wmw-usm]", {
-      area: "admin",
-      operation: "upload_dispenser_image_file",
-      message: uploadError.message,
-      buildingId: buildingId.value,
-      dispenserId: dispenserId.value,
-    });
-    return failure("Unable to upload dispenser image right now.");
+  if (currentImage.imagePaths.length + validatedImages.length > DISPENSER_IMAGE_MAX_COUNT) {
+    return failure(IMAGE_COUNT_MESSAGE);
   }
 
+  const uploadedPaths: string[] = [];
+  for (const image of validatedImages) {
+    const imagePath = buildDispenserImagePath(
+      buildingId.value,
+      dispenserId.value,
+      image.extension
+    );
+    const { error: uploadError } = await supabase.storage
+      .from(DISPENSER_IMAGE_BUCKET)
+      .upload(imagePath, image.file, {
+        contentType: image.file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      if (uploadedPaths.length > 0) {
+        const { error: cleanupError } = await supabase.storage
+          .from(DISPENSER_IMAGE_BUCKET)
+          .remove(uploadedPaths);
+
+        if (cleanupError) {
+          console.error("[wmw-usm]", {
+            area: "admin",
+            operation: "upload_dispenser_image_rollback",
+            message: cleanupError.message,
+            buildingId: buildingId.value,
+            dispenserId: dispenserId.value,
+          });
+        }
+      }
+      console.error("[wmw-usm]", {
+        area: "admin",
+        operation: "upload_dispenser_image_file",
+        message: uploadError.message,
+        buildingId: buildingId.value,
+        dispenserId: dispenserId.value,
+      });
+      return failure("Unable to upload dispenser image right now.");
+    }
+
+    uploadedPaths.push(imagePath);
+  }
+
+  const nextImagePaths = [...currentImage.imagePaths, ...uploadedPaths];
   const { data: updatedRows, error: updateError } = await supabase
     .from("dispensers")
     .update({
-      image_path: imagePath,
+      image_paths: nextImagePaths,
+      image_path: nextImagePaths[0] ?? null,
     })
     .eq("building_id", buildingId.value)
     .eq("dispenser_id", dispenserId.value)
@@ -347,7 +410,7 @@ export async function uploadDispenserImage(
   if (updateError || !updatedRows?.length) {
     const { error: cleanupError } = await supabase.storage
       .from(DISPENSER_IMAGE_BUCKET)
-      .remove([imagePath]);
+      .remove(uploadedPaths);
 
     if (cleanupError) {
       console.error("[wmw-usm]", {
@@ -373,24 +436,12 @@ export async function uploadDispenserImage(
     return failure(DISPENSER_NOT_FOUND_MESSAGE);
   }
 
-  if (currentImage.imagePath && currentImage.imagePath !== imagePath) {
-    const { error: previousImageCleanupError } = await supabase.storage
-      .from(DISPENSER_IMAGE_BUCKET)
-      .remove([currentImage.imagePath]);
-
-    if (previousImageCleanupError) {
-      console.error("[wmw-usm]", {
-        area: "admin",
-        operation: "upload_dispenser_image_replace_cleanup",
-        message: previousImageCleanupError.message,
-        buildingId: buildingId.value,
-        dispenserId: dispenserId.value,
-      });
-    }
-  }
-
   revalidateMapViews();
-  return success("Dispenser image uploaded successfully.");
+  return success(
+    validatedImages.length === 1
+      ? "Dispenser image uploaded successfully."
+      : "Dispenser images uploaded successfully."
+  );
 }
 
 export async function removeDispenserImage(
@@ -420,13 +471,13 @@ export async function removeDispenserImage(
     return currentImage;
   }
 
-  if (!currentImage.imagePath) {
+  if (currentImage.imagePaths.length === 0) {
     return success("Dispenser image removed successfully.");
   }
 
   const { error: storageError } = await supabase.storage
     .from(DISPENSER_IMAGE_BUCKET)
-    .remove([currentImage.imagePath]);
+    .remove(currentImage.imagePaths);
 
   if (storageError) {
     console.error("[wmw-usm]", {
@@ -442,6 +493,7 @@ export async function removeDispenserImage(
   const { data, error } = await supabase
     .from("dispensers")
     .update({
+      image_paths: [],
       image_path: null,
     })
     .eq("building_id", buildingId.value)
