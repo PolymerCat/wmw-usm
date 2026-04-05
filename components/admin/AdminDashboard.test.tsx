@@ -90,8 +90,11 @@ const BUILDINGS = [
         brand: "Coway",
         coldWaterStatus: "Available" as const,
         maintenanceStatus: "Operational" as const,
-        imagePath: "bld-1/dsp-1/first.jpg",
-        imageUrl: "https://cdn.test/bld-1/dsp-1/first.jpg",
+        imagePaths: ["bld-1/dsp-1/first.jpg", "bld-1/dsp-1/second.jpg"],
+        imageUrls: [
+          "https://cdn.test/bld-1/dsp-1/first.jpg",
+          "https://cdn.test/bld-1/dsp-1/second.jpg",
+        ],
       },
       {
         id: "dsp-2",
@@ -100,6 +103,8 @@ const BUILDINGS = [
         brand: "Cuckoo",
         coldWaterStatus: "Unavailable" as const,
         maintenanceStatus: "Under Maintenance" as const,
+        imagePaths: [],
+        imageUrls: [],
       },
     ],
   },
@@ -116,6 +121,8 @@ const BUILDINGS = [
         brand: "Coway",
         coldWaterStatus: "Available" as const,
         maintenanceStatus: "Operational" as const,
+        imagePaths: [],
+        imageUrls: [],
       },
     ],
   },
@@ -142,6 +149,19 @@ describe("AdminDashboard inline editing and pin workflows", () => {
     expect(
       screen.getAllByLabelText("Save updates for 1st Floor Pantry")[0]
     ).toBeInTheDocument();
+  });
+
+  it("slides through dispenser images in list card", () => {
+    render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
+
+    const image = screen.getByAltText("1st Floor Pantry dispenser");
+    expect(image).toHaveAttribute("src", "https://cdn.test/bld-1/dsp-1/first.jpg");
+
+    fireEvent.click(screen.getByLabelText("Next dispenser image"));
+    expect(screen.getByAltText("1st Floor Pantry dispenser")).toHaveAttribute(
+      "src",
+      "https://cdn.test/bld-1/dsp-1/second.jpg"
+    );
   });
 
   it("saves inline changes and calls updateDispenser with card payload", async () => {
@@ -173,14 +193,14 @@ describe("AdminDashboard inline editing and pin workflows", () => {
     });
   });
 
-  it("uploads image after creating dispenser when file is selected", async () => {
+  it("uploads images after creating dispenser when files are selected", async () => {
     const createDispenserMock = vi.mocked(adminActions.createDispenser);
     const uploadDispenserImageMock = vi.mocked(adminActions.uploadDispenserImage);
 
     render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
 
     const file = new File(["image"], "new.png", { type: "image/png" });
-    fireEvent.change(screen.getByLabelText("Upload image for new dispenser"), {
+    fireEvent.change(screen.getByLabelText("Upload images for new dispenser"), {
       target: { files: [file] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add Dispenser" }));
@@ -194,17 +214,17 @@ describe("AdminDashboard inline editing and pin workflows", () => {
     expect(formData).toBeInstanceOf(FormData);
     expect(formData?.get("buildingId")).toBe("bld-1");
     expect(formData?.get("dispenserId")).toBe("dsp-created");
-    expect(formData?.get("image")).toBe(file);
+    expect(formData?.getAll("images")).toEqual([file]);
   });
 
-  it("uploads replacement image from inline edit", async () => {
+  it("uploads new images from inline edit", async () => {
     const uploadDispenserImageMock = vi.mocked(adminActions.uploadDispenserImage);
 
     render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
 
     fireEvent.click(screen.getAllByLabelText("Edit dispenser 1st Floor Pantry")[0]);
     const file = new File(["replacement"], "replace.webp", { type: "image/webp" });
-    fireEvent.change(screen.getByLabelText("Replace image for 1st Floor Pantry"), {
+    fireEvent.change(screen.getByLabelText("Add images for 1st Floor Pantry"), {
       target: { files: [file] },
     });
     fireEvent.click(screen.getByLabelText("Save updates for 1st Floor Pantry"));
@@ -216,7 +236,7 @@ describe("AdminDashboard inline editing and pin workflows", () => {
     const formData = uploadDispenserImageMock.mock.calls[0]?.[0];
     expect(formData?.get("buildingId")).toBe("bld-1");
     expect(formData?.get("dispenserId")).toBe("dsp-1");
-    expect(formData?.get("image")).toBe(file);
+    expect(formData?.getAll("images")).toEqual([file]);
   });
 
   it("removes existing image from inline edit", async () => {

@@ -36,11 +36,15 @@ type SupabaseMockOptions = {
   updateImageError?: { message: string } | null;
   updateImageData?: Array<{ dispenser_id: string }> | null;
   deleteError?: { message: string } | null;
-  deleteData?: Array<{ dispenser_id: string; image_path?: string | null }> | null;
+  deleteData?: Array<{
+    dispenser_id: string;
+    image_paths?: string[] | null;
+    image_path?: string | null;
+  }> | null;
   updateBuildingError?: { message: string } | null;
   updateBuildingData?: Array<{ id: string }> | null;
   dispenserLookupError?: { message: string } | null;
-  dispenserLookupData?: { image_path: string | null } | null;
+  dispenserLookupData?: { image_paths?: string[] | null; image_path?: string | null } | null;
   storageUploadError?: { message: string } | null;
   storageRemoveError?: { message: string } | null;
 };
@@ -76,7 +80,10 @@ function makeSupabaseMock(options: SupabaseMockOptions = {}) {
   const updateImageCall = vi.fn().mockReturnValue({ eq: updateImageEqFirst });
 
   const updateDispenserTable = vi.fn((values: Record<string, unknown>) => {
-    if (Object.prototype.hasOwnProperty.call(values, "image_path")) {
+    if (
+      Object.prototype.hasOwnProperty.call(values, "image_path") ||
+      Object.prototype.hasOwnProperty.call(values, "image_paths")
+    ) {
       return updateImageCall(values);
     }
 
@@ -84,7 +91,9 @@ function makeSupabaseMock(options: SupabaseMockOptions = {}) {
   });
 
   const deleteSelect = vi.fn().mockResolvedValue({
-    data: options.deleteData ?? [{ dispenser_id: "dsp-1", image_path: null }],
+    data:
+      options.deleteData ??
+      [{ dispenser_id: "dsp-1", image_paths: [], image_path: null }],
     error: options.deleteError ?? null,
   });
   const deleteEqSecond = vi.fn().mockReturnValue({ select: deleteSelect });
@@ -92,7 +101,7 @@ function makeSupabaseMock(options: SupabaseMockOptions = {}) {
   const deleteCall = vi.fn().mockReturnValue({ eq: deleteEqFirst });
 
   const dispenserLookupMaybeSingle = vi.fn().mockResolvedValue({
-    data: options.dispenserLookupData ?? { image_path: null },
+    data: options.dispenserLookupData ?? { image_paths: [], image_path: null },
     error: options.dispenserLookupError ?? null,
   });
   const dispenserLookupEqSecond = vi
@@ -254,7 +263,12 @@ describe("admin server actions", () => {
   it("keeps dispenser deletion successful when image cleanup fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const supabase = makeSupabaseMock({
-      deleteData: [{ dispenser_id: "dsp-1", image_path: "bld-1/dsp-1/pic.jpg" }],
+      deleteData: [
+        {
+          dispenser_id: "dsp-1",
+          image_paths: ["bld-1/dsp-1/pic.jpg", "bld-1/dsp-1/pic-2.jpg"],
+        },
+      ],
       storageRemoveError: { message: "storage unavailable" },
     });
     createClientMock.mockResolvedValue(supabase as never);
@@ -269,11 +283,14 @@ describe("admin server actions", () => {
       ok: true,
       message: "Dispenser removed successfully.",
     });
-    expect(supabase.calls.storageRemove).toHaveBeenCalledWith(["bld-1/dsp-1/pic.jpg"]);
+    expect(supabase.calls.storageRemove).toHaveBeenCalledWith([
+      "bld-1/dsp-1/pic.jpg",
+      "bld-1/dsp-1/pic-2.jpg",
+    ]);
     expect(errorSpy).toHaveBeenCalled();
   });
 
-  it("uploads dispenser image and updates image_path", async () => {
+  it("uploads dispenser images and updates image_paths", async () => {
     const supabase = makeSupabaseMock();
     createClientMock.mockResolvedValue(supabase as never);
     requireAdminMock.mockResolvedValue({ ok: true, email: "admin@example.com" });
@@ -282,7 +299,7 @@ describe("admin server actions", () => {
     formData.append("buildingId", "bld-1");
     formData.append("dispenserId", "dsp-1");
     formData.append(
-      "image",
+      "images",
       new File([new Uint8Array([1, 2, 3])], "demo.png", { type: "image/png" })
     );
 
@@ -296,17 +313,15 @@ describe("admin server actions", () => {
     expect(supabase.calls.updateImageCall).toHaveBeenCalledTimes(1);
   });
 
-  it("replaces dispenser image and cleans up previous file", async () => {
-    const supabase = makeSupabaseMock({
-      dispenserLookupData: { image_path: "bld-1/dsp-1/old.jpg" },
-    });
+  it("accepts legacy single-image form payloads", async () => {
+    const supabase = makeSupabaseMock();
     createClientMock.mockResolvedValue(supabase as never);
     requireAdminMock.mockResolvedValue({ ok: true, email: "admin@example.com" });
 
     const formData = new FormData();
     formData.append("buildingId", "bld-1");
     formData.append("dispenserId", "dsp-1");
-    formData.append("image", new File(["next"], "next.webp", { type: "image/webp" }));
+    formData.append("image", new File(["legacy"], "legacy.jpg", { type: "image/jpeg" }));
 
     const result = await uploadDispenserImage(formData);
 
@@ -314,12 +329,44 @@ describe("admin server actions", () => {
       ok: true,
       message: "Dispenser image uploaded successfully.",
     });
-    expect(supabase.calls.storageRemove).toHaveBeenCalledWith(["bld-1/dsp-1/old.jpg"]);
+    expect(supabase.calls.storageUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it("appends dispenser images without deleting existing files", async () => {
+    const supabase = makeSupabaseMock({
+      dispenserLookupData: {
+        image_paths: ["bld-1/dsp-1/old.jpg"],
+        image_path: "bld-1/dsp-1/old.jpg",
+      },
+    });
+    createClientMock.mockResolvedValue(supabase as never);
+    requireAdminMock.mockResolvedValue({ ok: true, email: "admin@example.com" });
+
+    const formData = new FormData();
+    formData.append("buildingId", "bld-1");
+    formData.append("dispenserId", "dsp-1");
+    formData.append("images", new File(["next"], "next.webp", { type: "image/webp" }));
+
+    const result = await uploadDispenserImage(formData);
+
+    expect(result).toEqual({
+      ok: true,
+      message: "Dispenser image uploaded successfully.",
+    });
+    expect(supabase.calls.storageRemove).not.toHaveBeenCalled();
+    expect(supabase.calls.updateImageCall.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        image_paths: expect.arrayContaining(["bld-1/dsp-1/old.jpg"]),
+      })
+    );
   });
 
   it("removes dispenser image when admin user is authorized", async () => {
     const supabase = makeSupabaseMock({
-      dispenserLookupData: { image_path: "bld-1/dsp-1/existing.jpg" },
+      dispenserLookupData: {
+        image_paths: ["bld-1/dsp-1/existing.jpg", "bld-1/dsp-1/existing-2.jpg"],
+        image_path: "bld-1/dsp-1/existing.jpg",
+      },
     });
     createClientMock.mockResolvedValue(supabase as never);
     requireAdminMock.mockResolvedValue({ ok: true, email: "admin@example.com" });
@@ -335,8 +382,15 @@ describe("admin server actions", () => {
     });
     expect(supabase.calls.storageRemove).toHaveBeenCalledWith([
       "bld-1/dsp-1/existing.jpg",
+      "bld-1/dsp-1/existing-2.jpg",
     ]);
     expect(supabase.calls.updateImageCall).toHaveBeenCalledTimes(1);
+    expect(supabase.calls.updateImageCall.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        image_paths: [],
+        image_path: null,
+      })
+    );
   });
 
   it("rejects invalid image type for uploads", async () => {
@@ -344,7 +398,7 @@ describe("admin server actions", () => {
     formData.append("buildingId", "bld-1");
     formData.append("dispenserId", "dsp-1");
     formData.append(
-      "image",
+      "images",
       new File(["gif"], "bad.gif", {
         type: "image/gif",
       })
@@ -363,7 +417,7 @@ describe("admin server actions", () => {
     formData.append("buildingId", "bld-1");
     formData.append("dispenserId", "dsp-1");
     formData.append(
-      "image",
+      "images",
       new File([new Uint8Array(5 * 1024 * 1024 + 1)], "huge.png", {
         type: "image/png",
       })
@@ -375,6 +429,38 @@ describe("admin server actions", () => {
       ok: false,
       message: "Image size must be 5 MB or less.",
     });
+  });
+
+  it("rejects uploads that exceed maximum image count", async () => {
+    const supabase = makeSupabaseMock({
+      dispenserLookupData: {
+        image_paths: [
+          "bld-1/dsp-1/1.jpg",
+          "bld-1/dsp-1/2.jpg",
+          "bld-1/dsp-1/3.jpg",
+          "bld-1/dsp-1/4.jpg",
+          "bld-1/dsp-1/5.jpg",
+          "bld-1/dsp-1/6.jpg",
+          "bld-1/dsp-1/7.jpg",
+          "bld-1/dsp-1/8.jpg",
+        ],
+      },
+    });
+    createClientMock.mockResolvedValue(supabase as never);
+    requireAdminMock.mockResolvedValue({ ok: true, email: "admin@example.com" });
+
+    const formData = new FormData();
+    formData.append("buildingId", "bld-1");
+    formData.append("dispenserId", "dsp-1");
+    formData.append("images", new File(["png"], "img.png", { type: "image/png" }));
+
+    const result = await uploadDispenserImage(formData);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Maximum 8 images are allowed per dispenser.",
+    });
+    expect(supabase.calls.storageUpload).not.toHaveBeenCalled();
   });
 
   it("rejects upload when user is not an admin", async () => {
@@ -389,7 +475,7 @@ describe("admin server actions", () => {
     const formData = new FormData();
     formData.append("buildingId", "bld-1");
     formData.append("dispenserId", "dsp-1");
-    formData.append("image", new File(["png"], "img.png", { type: "image/png" }));
+    formData.append("images", new File(["png"], "img.png", { type: "image/png" }));
 
     const result = await uploadDispenserImage(formData);
 
