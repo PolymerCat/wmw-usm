@@ -20,7 +20,7 @@ export default async function HomePage() {
             <div className="flex flex-col items-center gap-2.5 text-center md:gap-3">
               <div className="flex h-12 w-[11rem] items-center justify-center overflow-hidden rounded-xl border border-[#d6cae7] bg-[#f7f2ff] px-2 md:h-14 md:w-[13rem]">
                 <Image
-                  src="/usm-logo.png"
+                  src="/usm-logoV2.png"
                   alt="School of Computer Sciences logo"
                   width={280}
                   height={104}

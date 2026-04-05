@@ -75,6 +75,50 @@ describe("MapShell nearest chip and nearest marker wiring", () => {
     cleanup();
   });
 
+  it("renders a small info button", () => {
+    render(<MapShell buildings={BUILDINGS} />);
+
+    expect(screen.getByRole("button", { name: "Open site information" })).toBeInTheDocument();
+  });
+
+  it("opens info popover and renders feedback link details", () => {
+    render(<MapShell buildings={BUILDINGS} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open site information" }));
+
+    expect(screen.getByRole("dialog", { name: "About this site" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Send feedback" })).toHaveAttribute(
+      "href",
+      "https://forms.gle/A1aCaxL8UdDp7yod8"
+    );
+    expect(screen.getByRole("link", { name: "Send feedback" })).toHaveAttribute(
+      "target",
+      "_blank"
+    );
+    expect(screen.getByRole("link", { name: "Send feedback" })).toHaveAttribute(
+      "rel",
+      "noopener noreferrer"
+    );
+  });
+
+  it("closes the info popover with Escape key", () => {
+    render(<MapShell buildings={BUILDINGS} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open site information" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "About this site" })).not.toBeInTheDocument();
+  });
+
+  it("closes the info popover when clicking outside", () => {
+    render(<MapShell buildings={BUILDINGS} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open site information" }));
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByRole("dialog", { name: "About this site" })).not.toBeInTheDocument();
+  });
+
   it("keeps nearest chip hidden before user location is available", () => {
     render(<MapShell buildings={BUILDINGS} />);
 
