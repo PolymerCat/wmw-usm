@@ -20,6 +20,8 @@ create table if not exists public.dispensers (
   brand text not null,
   cold_water_status text not null,
   maintenance_status text not null,
+  image_path text,
+  image_paths text[] not null default '{}',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   primary key (building_id, dispenser_id),
