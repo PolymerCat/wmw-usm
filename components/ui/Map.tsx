@@ -220,6 +220,7 @@ export default function Map({
           <Marker
             position={[userLocation.lat, userLocation.lng]}
             icon={createCurrentLocationIcon()}
+            interactive={false}
           />
         )}
       </MapContainer>
