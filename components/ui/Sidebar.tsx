@@ -320,7 +320,7 @@ export default function Sidebar({ building, onClose, userLocation }: SidebarProp
   return (
     <>
       <aside
-        className="fixed inset-x-0 bottom-0 z-[2000] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-[2600] md:hidden"
         style={{
           height: `${metrics.fullHeight}px`,
           transform: `translateY(${effectiveTranslate}px)`,
