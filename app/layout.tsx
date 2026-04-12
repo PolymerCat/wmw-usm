@@ -26,10 +26,48 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const appTitle = "Where's My Water?";
+const appDescription =
+  "Find nearest water stations in USM";
+const socialImagePath = "/preview.png";
+const metadataBaseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
+
 export const metadata: Metadata = {
-  title: "Where's My Water?",
-  description:
-    "Professional campus map for locating water refill stations across Universiti Sains Malaysia (USM).",
+  metadataBase: new URL(metadataBaseUrl),
+  title: appTitle,
+  description: appDescription,
+  applicationName: appTitle,
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: appTitle,
+    description: appDescription,
+    url: "/",
+    siteName: appTitle,
+    locale: "en_MY",
+    type: "website",
+    images: [
+      {
+        url: socialImagePath,
+        width: 864,
+        height: 271,
+        alt: "Where's My Water logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: appTitle,
+    description: appDescription,
+    images: [socialImagePath],
+  },
 };
 
 export default function RootLayout({
