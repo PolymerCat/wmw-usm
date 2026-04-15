@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, ZoomControl } from "react-leaflet";
 import { DivIcon, type LatLngBoundsExpression, type Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { haversineDistanceMeters } from "@/lib/nearest";
 import type { Building, LatLng } from "@/lib/types";
 
 interface MapProps {
@@ -24,6 +25,13 @@ const MAP_MIN_ZOOM = 17;
 const MAP_MAX_ZOOM = 19;
 const MOBILE_BREAKPOINT_PX = 768;
 const MOBILE_FOCUS_Y_RATIO = 0.4;
+const LOCATION_UPDATE_MIN_DISTANCE_METERS = 8;
+const LOCATION_UPDATE_MIN_INTERVAL_MS = 5000;
+const GEOLOCATION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: false,
+  timeout: 10000,
+  maximumAge: 5000,
+};
 
 function MapController({
   buildings,
@@ -65,12 +73,9 @@ function MapController({
       }
     }
 
-    if (userLocation) {
-      map.flyTo([userLocation.lat, userLocation.lng], MAP_MAX_ZOOM, { duration: 1.5 });
-      return;
+    if (!userLocation) {
+      map.flyTo(USM_CENTER, MAP_MIN_ZOOM, { duration: 1.5 });
     }
-
-    map.flyTo(USM_CENTER, MAP_MIN_ZOOM, { duration: 1.5 });
   }, [buildings, map, selectedBuildingId, userLocation]);
 
   return null;
@@ -137,52 +142,81 @@ export default function Map({
   onUserLocationChange,
 }: MapProps) {
   const [mapInstance, setMapInstance] = useState<LeafletMap | null>(null);
-  // THIS IS THE MAIN LOGIC FOR AUTO FINDING USER LOCATION
-  const locateUser = () => {
-    if (!navigator.geolocation) {
-      window.alert("Geolocation is not supported by your browser.");
+  const geolocationWatchIdRef = useRef<number | null>(null);
+  const lastAcceptedLocationRef = useRef<LatLng | null>(null);
+  const lastAcceptedTimestampRef = useRef<number | null>(null);
+  const hasCenteredOnUserRef = useRef(false);
+  const hasShownGeolocationErrorRef = useRef(false);
+
+  useEffect(() => {
+    if (!mapInstance) {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
+    const showGeolocationAlertOnce = (message: string) => {
+      if (hasShownGeolocationErrorRef.current) {
+        return;
+      }
+
+      hasShownGeolocationErrorRef.current = true;
+      window.alert(message);
+    };
+
+    if (!navigator.geolocation) {
+      showGeolocationAlertOnce("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const newLocation: LatLng = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
+        const now = Date.now();
+        const lastAcceptedLocation = lastAcceptedLocationRef.current;
+        const lastAcceptedTimestamp = lastAcceptedTimestampRef.current;
 
+        if (lastAcceptedLocation && lastAcceptedTimestamp !== null) {
+          const elapsedSinceLastAccepted = now - lastAcceptedTimestamp;
+          if (elapsedSinceLastAccepted < LOCATION_UPDATE_MIN_INTERVAL_MS) {
+            return;
+          }
+
+          const distanceFromLastAccepted = haversineDistanceMeters(lastAcceptedLocation, newLocation);
+          if (distanceFromLastAccepted < LOCATION_UPDATE_MIN_DISTANCE_METERS) {
+            return;
+          }
+        }
+
+        lastAcceptedLocationRef.current = newLocation;
+        lastAcceptedTimestampRef.current = now;
         onUserLocationChange(newLocation);
 
-        if (mapInstance) {
+        if (!hasCenteredOnUserRef.current) {
+          hasCenteredOnUserRef.current = true;
           mapInstance.flyTo([newLocation.lat, newLocation.lng], MAP_MAX_ZOOM, { duration: 1.2 });
         }
       },
       (error) => {
         console.error("Geolocation error", error);
-        window.alert("Unable to retrieve your location. Please allow location access and try again.");
+        showGeolocationAlertOnce(
+          "Unable to retrieve your location. Please allow location access and try again."
+        );
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
+      GEOLOCATION_OPTIONS
     );
-  };
 
-  const [hasAttemptedGeolocation, setHasAttemptedGeolocation] = useState(false);
+    geolocationWatchIdRef.current = watchId;
 
-  useEffect(() => {
-    if (mapInstance && !userLocation && !hasAttemptedGeolocation) {
-      setHasAttemptedGeolocation(true);
-      locateUser();
-    }
-  }, [mapInstance, userLocation, hasAttemptedGeolocation]);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
 
-  useEffect(() => {
-    if (userLocation && mapInstance) {
-      mapInstance.flyTo([userLocation.lat, userLocation.lng], MAP_MAX_ZOOM, { duration: 0.9 });
-    }
-  }, [userLocation, mapInstance]);
+      if (geolocationWatchIdRef.current === watchId) {
+        geolocationWatchIdRef.current = null;
+      }
+    };
+  }, [mapInstance, onUserLocationChange]);
 
   return (
     <div className="h-full min-h-[100svh] w-full">
