@@ -22,7 +22,7 @@ const USM_BOUNDS: LatLngBoundsExpression = [
   [5.363583489536974, 100.31088833599742],
 ];
 const MAP_MIN_ZOOM = 17;
-const MAP_MAX_ZOOM = 19;
+const MAP_MAX_ZOOM = 20;
 const MOBILE_BREAKPOINT_PX = 768;
 const MOBILE_FOCUS_Y_RATIO = 0.4;
 const LOCATION_UPDATE_MIN_DISTANCE_METERS = 8;
@@ -230,7 +230,7 @@ export default function Map({
         maxBounds={USM_BOUNDS}
         maxBoundsViscosity={1.0}
       >
-        <TileLayer url="/new_tiles/{z}/{x}/{y}.png" maxZoom={MAP_MAX_ZOOM} />
+        <TileLayer url="/updated_tiles/{z}/{x}/{y}.png" maxZoom={MAP_MAX_ZOOM} />
         <ZoomControl position="bottomright" />
         <MapController
           buildings={buildings}
