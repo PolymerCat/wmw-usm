@@ -83,9 +83,9 @@ export default function MapShell({ buildings }: MapShellProps) {
           aria-controls={infoPanelId}
           aria-expanded={isInfoOpen}
           onClick={() => setIsInfoOpen((open) => !open)}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#c8b8dd] bg-white/96 text-[#3f226c] shadow-[0_16px_30px_-20px_rgba(67,26,124,0.8)] transition hover:border-[#a98fd0] hover:text-[#532491] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#c8b8dd] bg-purple-950 text-[#ffffff] shadow-[0_16px_30px_-20px_rgba(67,26,124,0.8)] transition hover:border-[#a98fd0] hover:text-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-95"
         >
-          <Info className="h-5 w-5" />
+          <Info className="h-5 w-5 " />
         </button>
 
         {isInfoOpen && (
