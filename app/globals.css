@@ -107,6 +107,6 @@ a:focus-visible {
 
 @media (max-width: 768px) {
   .leaflet-container .leaflet-bottom .leaflet-control {
-    margin-bottom: calc(max(1rem, env(safe-area-inset-bottom)) + .5rem) !important;
+    margin-bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4rem) !important;
   }
 }

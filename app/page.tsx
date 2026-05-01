@@ -8,7 +8,7 @@ export default async function HomePage() {
   const buildings = await getBuildings();
 
   return (
-    <main className="relative h-screen min-h-[100svh] w-screen overflow-hidden bg-background">
+    <main className="relative h-[100dvh] min-h-[100dvh] w-screen overflow-hidden bg-background">
       <div className="pointer-events-none absolute inset-0 z-[1]">
         <div className="absolute top-[-6rem] left-[-6rem] h-72 w-72 rounded-full bg-[var(--brand-400)]/20 blur-3xl" />
         <div className="absolute top-[-8rem] right-[-4rem] h-80 w-80 rounded-full bg-[var(--accent-500)]/10 blur-3xl" />
