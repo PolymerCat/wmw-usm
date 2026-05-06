@@ -17,7 +17,7 @@ interface MapProps {
 }
 
 const USM_CENTER: [number, number] = [5.356174000404129, 100.2989353671396];
-const USM_BOUNDS: LatLngBoundsExpression = [
+const USM_BOUNDS: [[number, number], [number, number]] = [
   [5.351636862846997, 100.2865113240709],
   [5.363583489536974, 100.31088833599742],
 ];
@@ -32,6 +32,16 @@ const GEOLOCATION_OPTIONS: PositionOptions = {
   timeout: 10000,
   maximumAge: 5000,
 };
+
+function isWithinUsmBounds(location: LatLng): boolean {
+  const [[southWestLat, southWestLng], [northEastLat, northEastLng]] = USM_BOUNDS;
+  return (
+    location.lat >= southWestLat &&
+    location.lat <= northEastLat &&
+    location.lng >= southWestLng &&
+    location.lng <= northEastLng
+  );
+}
 
 function MapController({
   buildings,
@@ -147,6 +157,7 @@ export default function Map({
   const lastAcceptedTimestampRef = useRef<number | null>(null);
   const hasCenteredOnUserRef = useRef(false);
   const hasShownGeolocationErrorRef = useRef(false);
+  const hasShownOutsideBoundsAlertRef = useRef(false);
 
   useEffect(() => {
     if (!mapInstance) {
@@ -173,6 +184,17 @@ export default function Map({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
+
+        if (!isWithinUsmBounds(newLocation)) {
+          if (!hasShownOutsideBoundsAlertRef.current) {
+            hasShownOutsideBoundsAlertRef.current = true;
+            window.alert("You are outside USM campus map bounds.");
+          }
+          return;
+        }
+
+        hasShownOutsideBoundsAlertRef.current = false;
+
         const now = Date.now();
         const lastAcceptedLocation = lastAcceptedLocationRef.current;
         const lastAcceptedTimestamp = lastAcceptedTimestampRef.current;
@@ -219,7 +241,7 @@ export default function Map({
   }, [mapInstance, onUserLocationChange]);
 
   return (
-    <div className="h-full min-h-[100svh] w-full">
+    <div className="h-full min-h-[100dvh] w-full">
       <MapContainer
         center={USM_CENTER}
         zoom={MAP_MIN_ZOOM}

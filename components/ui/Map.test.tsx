@@ -7,6 +7,7 @@ import type { Building } from "@/lib/types";
 const flyToMock = vi.fn();
 const watchPositionMock = vi.fn();
 const clearWatchMock = vi.fn();
+const alertMock = vi.fn();
 const GEOLOCATION_WATCH_ID = 91;
 const mockedLeafletMap = {
   flyTo: flyToMock,
@@ -139,12 +140,18 @@ describe("Map marker nearest-state rendering", () => {
         clearWatch: clearWatchMock,
       },
     });
+
+    Object.defineProperty(window, "alert", {
+      writable: true,
+      value: alertMock,
+    });
   });
 
   beforeEach(() => {
     flyToMock.mockClear();
     watchPositionMock.mockReset();
     clearWatchMock.mockReset();
+    alertMock.mockReset();
     geolocationSuccessHandler = null;
 
     watchPositionMock.mockImplementation((success: PositionCallback) => {
@@ -246,7 +253,7 @@ describe("Map marker nearest-state rendering", () => {
 
     expect(onUserLocationChange).toHaveBeenCalledTimes(1);
     expect(flyToMock.mock.calls.length).toBe(flyToCountBeforeFirstFix + 1);
-    expect(flyToMock).toHaveBeenLastCalledWith([5.3561, 100.2991], 19, { duration: 1.2 });
+    expect(flyToMock).toHaveBeenLastCalledWith([5.3561, 100.2991], 20, { duration: 1.2 });
 
     nowSpy.mockRestore();
   });
@@ -354,5 +361,54 @@ describe("Map marker nearest-state rendering", () => {
     expect(flyToMock.mock.calls.length).toBe(flyToCountAfterFirstFix);
 
     nowSpy.mockRestore();
+  });
+
+  it("does not auto-focus or update user location when position is outside USM bounds", () => {
+    const onUserLocationChange = vi.fn();
+
+    render(
+      <Map
+        buildings={BUILDINGS}
+        onBuildingSelect={vi.fn()}
+        selectedBuildingId={null}
+        nearestBuildingId={null}
+        userLocation={null}
+        onUserLocationChange={onUserLocationChange}
+      />
+    );
+
+    const flyToCountBeforeOutsideFix = flyToMock.mock.calls.length;
+
+    emitGeolocationSuccess(5.4, 100.35);
+
+    expect(onUserLocationChange).not.toHaveBeenCalled();
+    expect(flyToMock.mock.calls.length).toBe(flyToCountBeforeOutsideFix);
+    expect(alertMock).toHaveBeenCalledWith("You are outside USM campus map bounds.");
+  });
+
+  it("shows outside-bounds popup once per outside episode", () => {
+    const onUserLocationChange = vi.fn();
+
+    render(
+      <Map
+        buildings={BUILDINGS}
+        onBuildingSelect={vi.fn()}
+        selectedBuildingId={null}
+        nearestBuildingId={null}
+        userLocation={null}
+        onUserLocationChange={onUserLocationChange}
+      />
+    );
+
+    emitGeolocationSuccess(5.4, 100.35);
+    emitGeolocationSuccess(5.42, 100.36);
+
+    expect(alertMock).toHaveBeenCalledTimes(1);
+
+    emitGeolocationSuccess(5.3561, 100.2991);
+    emitGeolocationSuccess(5.4, 100.35);
+
+    expect(alertMock).toHaveBeenCalledTimes(2);
+    expect(onUserLocationChange).toHaveBeenCalledTimes(1);
   });
 });
