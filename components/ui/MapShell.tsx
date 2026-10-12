@@ -94,7 +94,7 @@ export default function MapShell({ buildings }: MapShellProps) {
             role="dialog"
             aria-modal="false"
             aria-labelledby={`${infoPanelId}-title`}
-            className="absolute top-[calc(100%+0.6rem)] right-0 w-[min(21rem,88vw)] rounded-2xl border border-[#d8cdea] bg-white/98 p-4 shadow-[0_18px_38px_-22px_rgba(67,26,124,0.88)] backdrop-blur-sm"
+            className="absolute top-[calc(100%+0.6rem)] right-0 w-[min(21rem,88vw)] rounded-2xl border border-[#d8cdea] bg-white/98 p-4 shadow-[0_18px_38px_-22px_rgba(67,26,124,0.88)]"
           >
             <div className="flex items-start justify-between gap-3">
               <h2
@@ -147,7 +147,7 @@ export default function MapShell({ buildings }: MapShellProps) {
 
       {nearestBuilding && nearestBuildingName && roundedNearestDistance && (
         <div className="pointer-events-none absolute top-[8.85rem] left-1/2 z-[1050] w-[min(84vw,26rem)] -translate-x-1/2 sm:top-[9.2rem] sm:w-[min(88vw,30rem)] md:top-[12.5rem] md:w-[min(92vw,34rem)]">
-          <div className="rounded-2xl border-2 border-[#0f766e] bg-white/98 px-4 py-2 text-center text-[13px] leading-tight font-extrabold text-[#0b3f3b] shadow-[0_18px_34px_-16px_rgba(6,110,101,0.9)] backdrop-blur-sm md:px-5 md:py-2.5 md:text-sm">
+          <div className="rounded-2xl border-2 border-[#0f766e] bg-white/98 px-4 py-2 text-center text-[13px] leading-tight font-extrabold text-[#0b3f3b] shadow-[0_18px_34px_-16px_rgba(6,110,101,0.9)] md:px-5 md:py-2.5 md:text-sm">
             Nearest dispenser: {nearestBuildingName} • {roundedNearestDistance} m
           </div>
         </div>

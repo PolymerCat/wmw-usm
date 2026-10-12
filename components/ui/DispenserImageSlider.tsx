@@ -1,6 +1,7 @@
 "use client";
 
-import { type KeyboardEvent, useId, useState } from "react";
+import Image from "next/image";
+import { type KeyboardEvent, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface DispenserImageSliderProps {
@@ -10,7 +11,10 @@ interface DispenserImageSliderProps {
   className: string;
   imageClassName: string;
   emptyClassName: string;
+  sizes?: string;
 }
+
+const DEFAULT_IMAGE_SIZES = "(min-width: 768px) 24rem, 92vw";
 
 function clampIndex(index: number, length: number) {
   if (length === 0) {
@@ -28,6 +32,13 @@ function clampIndex(index: number, length: number) {
   return index;
 }
 
+function isNeighborIndex(index: number, currentIndex: number, length: number) {
+  return (
+    index === clampIndex(currentIndex - 1, length) ||
+    index === clampIndex(currentIndex + 1, length)
+  );
+}
+
 export default function DispenserImageSlider({
   imageUrls,
   alt,
@@ -35,19 +46,51 @@ export default function DispenserImageSlider({
   className,
   imageClassName,
   emptyClassName,
+  sizes = DEFAULT_IMAGE_SIZES,
 }: DispenserImageSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [loadedUrls, setLoadedUrls] = useState<Record<string, true>>({});
+  const trackRef = useRef<HTMLDivElement | null>(null);
   const regionId = useId();
   const hasImages = imageUrls.length > 0;
   const hasMultiple = imageUrls.length > 1;
   const currentIndex = clampIndex(activeIndex, imageUrls.length);
+  // Preload neighbours only after the visible image is in, so off-screen cards stay lazy.
+  const isCurrentLoaded = Boolean(loadedUrls[imageUrls[currentIndex]]);
+
+  const goTo = (index: number) => {
+    const nextIndex = clampIndex(index, imageUrls.length);
+    setActiveIndex(nextIndex);
+
+    const track = trackRef.current;
+    if (track && typeof track.scrollTo === "function") {
+      track.scrollTo({ left: nextIndex * track.clientWidth, behavior: "smooth" });
+    }
+  };
 
   const goToPrevious = () => {
-    setActiveIndex((current) => clampIndex(current - 1, imageUrls.length));
+    goTo(currentIndex - 1);
   };
 
   const goToNext = () => {
-    setActiveIndex((current) => clampIndex(current + 1, imageUrls.length));
+    goTo(currentIndex + 1);
+  };
+
+  // Keeps the dots in sync with native swiping. Scroll events already fire at most once
+  // per frame, and React skips the render when the index has not changed.
+  const handleScroll = () => {
+    const track = trackRef.current;
+    if (!track || track.clientWidth === 0) {
+      return;
+    }
+
+    setActiveIndex(
+      clampIndex(Math.round(track.scrollLeft / track.clientWidth), imageUrls.length)
+    );
+  };
+
+  const markLoaded = (url: string) => {
+    setLoadedUrls((current) => (current[url] ? current : { ...current, [url]: true }));
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -84,8 +127,42 @@ export default function DispenserImageSlider({
       aria-label={`${alt} images`}
       aria-describedby={hasMultiple ? regionId : undefined}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageUrls[currentIndex]} alt={alt} className={imageClassName} />
+      <div
+        ref={trackRef}
+        onScroll={hasMultiple ? handleScroll : undefined}
+        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {imageUrls.map((url, index) => {
+          const isLoaded = Boolean(loadedUrls[url]);
+          const shouldPreload =
+            hasMultiple && isCurrentLoaded && isNeighborIndex(index, currentIndex, imageUrls.length);
+
+          return (
+            <div
+              key={url}
+              className="relative h-full w-full shrink-0 snap-center snap-always"
+              aria-roledescription={hasMultiple ? "slide" : undefined}
+              aria-label={hasMultiple ? `${index + 1} of ${imageUrls.length}` : undefined}
+            >
+              {!isLoaded && (
+                <div aria-hidden="true" className="absolute inset-0 animate-pulse bg-[#ece3f8]" />
+              )}
+              <Image
+                src={url}
+                alt={alt}
+                fill
+                sizes={sizes}
+                loading={shouldPreload ? "eager" : "lazy"}
+                draggable={false}
+                onLoad={() => markLoaded(url)}
+                className={`${imageClassName} transition-opacity duration-300 ${
+                  isLoaded ? "opacity-100" : "opacity-0"
+                }`}
+              />
+            </div>
+          );
+        })}
+      </div>
 
       {hasMultiple ? (
         <>
@@ -109,12 +186,13 @@ export default function DispenserImageSlider({
             id={regionId}
             className="pointer-events-none absolute right-0 bottom-2 left-0 flex items-center justify-center gap-1"
           >
-            {imageUrls.map((_, index) => (
+            {imageUrls.map((url, index) => (
               <button
-                key={`${alt}:${index}`}
+                key={url}
                 type="button"
-                onClick={() => setActiveIndex(index)}
+                onClick={() => goTo(index)}
                 aria-label={`View dispenser image ${index + 1}`}
+                aria-current={index === currentIndex ? "true" : undefined}
                 className={`pointer-events-auto h-1.5 w-1.5 rounded-full transition ${
                   index === currentIndex ? "bg-white" : "bg-white/55"
                 }`}

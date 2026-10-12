@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import {
-  JetBrains_Mono,
-  Merriweather,
-  Source_Sans_3,
-} from "next/font/google";
+import { Merriweather, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 
@@ -17,12 +13,6 @@ const merriweather = Merriweather({
   variable: "--font-merriweather",
   subsets: ["latin"],
   weight: ["400", "700", "900"],
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
   display: "swap",
 });
 
@@ -78,7 +68,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sourceSans.variable} ${merriweather.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${sourceSans.variable} ${merriweather.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

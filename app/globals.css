@@ -39,7 +39,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-source-sans);
   --font-display: var(--font-merriweather);
-  --font-mono: var(--font-jetbrains-mono);
 }
 
 @keyframes markerPulse {

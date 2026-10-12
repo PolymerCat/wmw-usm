@@ -363,6 +363,34 @@ describe("Map marker nearest-state rendering", () => {
     nowSpy.mockRestore();
   });
 
+  it("does not re-center on the selected building when the user location changes", () => {
+    const props = {
+      buildings: BUILDINGS,
+      onBuildingSelect: vi.fn(),
+      selectedBuildingId: "bld-1",
+      nearestBuildingId: null,
+      onUserLocationChange: vi.fn(),
+    };
+    const { rerender } = render(<Map {...props} userLocation={{ lat: 5.3561, lng: 100.2991 }} />);
+
+    const flyToCountAfterSelection = flyToMock.mock.calls.length;
+
+    rerender(<Map {...props} userLocation={{ lat: 5.3565, lng: 100.2995 }} />);
+    rerender(<Map {...props} userLocation={{ lat: 5.3569, lng: 100.2999 }} />);
+
+    expect(flyToMock.mock.calls.length).toBe(flyToCountAfterSelection);
+
+    rerender(
+      <Map
+        {...props}
+        selectedBuildingId="bld-2"
+        userLocation={{ lat: 5.3569, lng: 100.2999 }}
+      />
+    );
+
+    expect(flyToMock.mock.calls.length).toBe(flyToCountAfterSelection + 1);
+  });
+
   it("does not auto-focus or update user location when position is outside USM bounds", () => {
     const onUserLocationChange = vi.fn();
 

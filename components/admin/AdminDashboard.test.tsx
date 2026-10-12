@@ -154,13 +154,19 @@ describe("AdminDashboard inline editing and pin workflows", () => {
   it("slides through dispenser images in list card", () => {
     render(<AdminDashboard buildings={BUILDINGS} adminEmail="admin@example.com" />);
 
-    const image = screen.getByAltText("1st Floor Pantry dispenser");
-    expect(image).toHaveAttribute("src", "https://cdn.test/bld-1/dsp-1/first.jpg");
+    const images = screen.getAllByAltText("1st Floor Pantry dispenser");
+    expect(images[0].getAttribute("src")).toContain(
+      encodeURIComponent("https://cdn.test/bld-1/dsp-1/first.jpg")
+    );
+    expect(screen.getByLabelText("View dispenser image 1")).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
 
     fireEvent.click(screen.getByLabelText("Next dispenser image"));
-    expect(screen.getByAltText("1st Floor Pantry dispenser")).toHaveAttribute(
-      "src",
-      "https://cdn.test/bld-1/dsp-1/second.jpg"
+    expect(screen.getByLabelText("View dispenser image 2")).toHaveAttribute(
+      "aria-current",
+      "true"
     );
   });
 

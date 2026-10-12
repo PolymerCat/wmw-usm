@@ -364,6 +364,8 @@ export async function uploadDispenserImage(
       .from(DISPENSER_IMAGE_BUCKET)
       .upload(imagePath, image.file, {
         contentType: image.file.type,
+        // Paths are unique per upload, so browsers and CDNs can cache them for a year.
+        cacheControl: "31536000",
         upsert: false,
       });
 

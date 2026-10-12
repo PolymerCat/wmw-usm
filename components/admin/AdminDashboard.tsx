@@ -28,6 +28,7 @@ import {
   DISPENSER_IMAGE_MAX_BYTES,
 } from "@/lib/dispenser-images";
 import DispenserImageSlider from "@/components/ui/DispenserImageSlider";
+import { compressImageFile } from "@/lib/compress-image";
 import { MAINTENANCE_WRITE_OPTIONS } from "@/lib/admin/payload";
 import {
   COLD_WATER_STATUS_OPTIONS,
@@ -66,12 +67,13 @@ const DEFAULT_MUTATION_ERROR_MESSAGE =
   "Something went wrong while saving. Please try again.";
 const IMAGE_INPUT_ACCEPT = DISPENSER_IMAGE_ALLOWED_MIME_TYPES.join(",");
 const IMAGE_MAX_MB = Math.floor(DISPENSER_IMAGE_MAX_BYTES / (1024 * 1024));
+const ADMIN_PREVIEW_IMAGE_SIZES = "(min-width: 768px) 22rem, 92vw";
 
 function toSelectedFiles(input: FileList | null): File[] {
   return input ? Array.from(input) : [];
 }
 
-function validateImageFiles(files: File[]): string | null {
+function validateImageTypes(files: File[]): string | null {
   for (const file of files) {
     if (
       !DISPENSER_IMAGE_ALLOWED_MIME_TYPES.includes(
@@ -80,13 +82,22 @@ function validateImageFiles(files: File[]): string | null {
     ) {
       return "Unsupported image format. Use JPEG, PNG, or WEBP.";
     }
-
-    if (file.size > DISPENSER_IMAGE_MAX_BYTES) {
-      return `Image size must be ${IMAGE_MAX_MB} MB or less.`;
-    }
   }
 
   return null;
+}
+
+// Size is checked after compression so large phone photos can still be uploaded.
+async function prepareImagesForUpload(
+  files: File[]
+): Promise<{ ok: true; files: File[] } | { ok: false; message: string }> {
+  const compressedFiles = await Promise.all(files.map(compressImageFile));
+
+  if (compressedFiles.some((file) => file.size > DISPENSER_IMAGE_MAX_BYTES)) {
+    return { ok: false, message: `Image size must be ${IMAGE_MAX_MB} MB or less.` };
+  }
+
+  return { ok: true, files: compressedFiles };
 }
 
 function initialFields(): DispenserMutationFields {
@@ -309,7 +320,7 @@ export default function AdminDashboard({
 
     const selectedImages = newImageFiles;
     if (selectedImages.length > 0) {
-      const imageValidationMessage = validateImageFiles(selectedImages);
+      const imageValidationMessage = validateImageTypes(selectedImages);
       if (imageValidationMessage) {
         setMessage("error", imageValidationMessage);
         return;
@@ -326,6 +337,11 @@ export default function AdminDashboard({
 
     runMutation(
       async () => {
+        const preparedImages = await prepareImagesForUpload(selectedImages);
+        if (!preparedImages.ok) {
+          return preparedImages;
+        }
+
         const createResult = await createDispenser(payload);
         if (!createResult.ok) {
           return createResult;
@@ -346,7 +362,7 @@ export default function AdminDashboard({
         const imageFormData = new FormData();
         imageFormData.append("buildingId", buildingId);
         imageFormData.append("dispenserId", createResult.dispenserId);
-        for (const imageFile of selectedImages) {
+        for (const imageFile of preparedImages.files) {
           imageFormData.append("images", imageFile);
         }
 
@@ -416,7 +432,7 @@ export default function AdminDashboard({
     const shouldRemoveImages = editDraft.removeImages;
 
     if (imagesToUpload.length > 0) {
-      const imageValidationMessage = validateImageFiles(imagesToUpload);
+      const imageValidationMessage = validateImageTypes(imagesToUpload);
       if (imageValidationMessage) {
         setMessage("error", imageValidationMessage);
         return;
@@ -436,6 +452,11 @@ export default function AdminDashboard({
 
     runMutation(
       async () => {
+        const preparedImages = await prepareImagesForUpload(imagesToUpload);
+        if (!preparedImages.ok) {
+          return preparedImages;
+        }
+
         const updateResult = await updateDispenser({
           buildingId,
           dispenserId,
@@ -462,7 +483,7 @@ export default function AdminDashboard({
           const imageFormData = new FormData();
           imageFormData.append("buildingId", buildingId);
           imageFormData.append("dispenserId", dispenserId);
-          for (const imageFile of imagesToUpload) {
+          for (const imageFile of preparedImages.files) {
             imageFormData.append("images", imageFile);
           }
 
@@ -1097,6 +1118,7 @@ export default function AdminDashboard({
                               <DispenserImageSlider
                                 imageUrls={currentImageUrls}
                                 alt={`${dispenser.locationDescription} dispenser`}
+                                sizes={ADMIN_PREVIEW_IMAGE_SIZES}
                                 emptyLabel="No image uploaded yet."
                                 className="relative mb-2 h-24 w-full overflow-hidden rounded-md border border-[#d8cdea] bg-[#f6f0ff]"
                                 imageClassName="h-full w-full object-cover"
@@ -1177,6 +1199,7 @@ export default function AdminDashboard({
                         <DispenserImageSlider
                           imageUrls={dispenser.imageUrls}
                           alt={`${dispenser.locationDescription} dispenser`}
+                          sizes={ADMIN_PREVIEW_IMAGE_SIZES}
                           emptyLabel="No image uploaded"
                           className="relative mb-2 h-24 w-full overflow-hidden rounded-lg border border-[#d8cdea] bg-[#f6f0ff]"
                           imageClassName="h-full w-full object-cover"

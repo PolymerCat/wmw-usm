@@ -103,13 +103,61 @@ describe("Sidebar", () => {
       />
     );
 
-    const image = screen.getAllByAltText("Pantry dispenser")[0];
-    expect(image).toHaveAttribute("src", "https://cdn.test/1.jpg");
+    const images = screen.getAllByAltText("Pantry dispenser");
+    expect(images).toHaveLength(2);
+    expect(images[0].getAttribute("src")).toContain(
+      encodeURIComponent("https://cdn.test/1.jpg")
+    );
+    expect(images[1].getAttribute("src")).toContain(
+      encodeURIComponent("https://cdn.test/2.jpg")
+    );
+    expect(screen.getByLabelText("View dispenser image 1")).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
 
-    fireEvent.click(screen.getAllByLabelText("Next dispenser image")[0]);
-    expect(screen.getAllByAltText("Pantry dispenser")[0]).toHaveAttribute(
-      "src",
-      "https://cdn.test/2.jpg"
+    fireEvent.click(screen.getByLabelText("Next dispenser image"));
+    expect(screen.getByLabelText("View dispenser image 2")).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
+    expect(screen.getByLabelText("View dispenser image 1")).not.toHaveAttribute(
+      "aria-current"
+    );
+  });
+
+  it("syncs the active dot when the image track is swiped", () => {
+    render(
+      <Sidebar
+        building={{
+          ...BUILDING,
+          dispensers: [
+            {
+              id: "dsp-1",
+              buildingId: "bld-1",
+              locationDescription: "Pantry",
+              brand: "Coway",
+              coldWaterStatus: "Available",
+              maintenanceStatus: "Operational",
+              imagePaths: ["a.jpg", "b.jpg", "c.jpg"],
+              imageUrls: ["https://cdn.test/a.jpg", "https://cdn.test/b.jpg", "https://cdn.test/c.jpg"],
+            },
+          ],
+        }}
+        onClose={vi.fn()}
+        userLocation={null}
+      />
+    );
+
+    const track = screen.getAllByAltText("Pantry dispenser")[0].closest(".snap-x");
+    expect(track).not.toBeNull();
+    Object.defineProperty(track, "clientWidth", { configurable: true, value: 300 });
+    Object.defineProperty(track, "scrollLeft", { configurable: true, value: 600 });
+    fireEvent.scroll(track as Element);
+
+    expect(screen.getByLabelText("View dispenser image 3")).toHaveAttribute(
+      "aria-current",
+      "true"
     );
   });
 });

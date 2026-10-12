@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import { MapPin, Navigation, X } from "lucide-react";
 import type { Building } from "@/lib/types";
 import DispenserImageSlider from "@/components/ui/DispenserImageSlider";
@@ -28,6 +37,7 @@ type DragState = {
 };
 
 const DEFAULT_SNAP: MobileSnap = "half";
+const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
 const DEFAULT_METRICS: SheetMetrics = {
   fullHeight: 620,
   peekHeight: 188,
@@ -66,6 +76,29 @@ function buildMetrics(viewportHeight: number): SheetMetrics {
   };
 }
 
+function subscribeToDesktopQuery(onChange: () => void) {
+  if (typeof window.matchMedia !== "function") {
+    return () => {};
+  }
+
+  const mediaQuery = window.matchMedia(DESKTOP_MEDIA_QUERY);
+  mediaQuery.addEventListener("change", onChange);
+  return () => mediaQuery.removeEventListener("change", onChange);
+}
+
+function getIsDesktop() {
+  return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
+}
+
+function getIsDesktopOnServer() {
+  return false;
+}
+
+// Render a single layout so dispenser images are only mounted (and downloaded) once.
+function useIsDesktop() {
+  return useSyncExternalStore(subscribeToDesktopQuery, getIsDesktop, getIsDesktopOnServer);
+}
+
 function openDirections(building: Building, userLocation: { lat: number; lng: number } | null) {
   const destination = `${building.latitude},${building.longitude}`;
   const origin = userLocation ? `${userLocation.lat},${userLocation.lng}` : "My+Location";
@@ -101,7 +134,8 @@ function DirectionsButton({
   );
 }
 
-function DispenserList({ building }: { building: Building }) {
+// Memoized so dragging the mobile sheet does not re-render every dispenser card.
+const DispenserList = memo(function DispenserList({ building }: { building: Building }) {
   return (
     <div className="space-y-4 px-4 py-4 md:px-5 md:py-5">
       {building.dispensers.map((dispenser) => (
@@ -142,9 +176,10 @@ function DispenserList({ building }: { building: Building }) {
       )}
     </div>
   );
-}
+});
 
 export default function Sidebar({ building, onClose, userLocation }: SidebarProps) {
+  const isDesktop = useIsDesktop();
   const [mobileSnap, setMobileSnap] = useState<MobileSnap>(DEFAULT_SNAP);
   const [metrics, setMetrics] = useState<SheetMetrics>(DEFAULT_METRICS);
   const [dragTranslate, setDragTranslate] = useState<number | null>(null);
@@ -317,10 +352,10 @@ export default function Sidebar({ building, onClose, userLocation }: SidebarProp
     return null;
   }
 
-  return (
-    <>
+  if (!isDesktop) {
+    return (
       <aside
-        className="fixed inset-x-0 bottom-0 z-[2600] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-[2600]"
         style={{
           height: `${metrics.fullHeight}px`,
           transform: `translateY(${effectiveTranslate}px)`,
@@ -383,43 +418,45 @@ export default function Sidebar({ building, onClose, userLocation }: SidebarProp
           )}
         </div>
       </aside>
+    );
+  }
 
-      <aside className="fixed top-0 left-0 z-[2000] hidden h-full w-[min(26rem,92vw)] border-r border-[#d2c4e6] bg-white shadow-[0_18px_45px_-28px_rgba(67,26,124,0.7)] md:block">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-[#d8cdea] bg-gradient-to-b from-[#f6f0ff] to-white px-6 pt-6 pb-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#d8cdea] bg-white px-2.5 py-1 text-[10px] font-bold tracking-[0.18em] text-[#5a2c93] uppercase">
-                  <MapPin className="h-3 w-3" />
-                  Selected Building
-                </p>
-                <h2 className="font-display text-[1.75rem] leading-tight font-bold text-[#301a55]">
-                  {building.name}
-                </h2>
-                <p className="mt-2 text-sm font-semibold text-[#4a3a66]">
-                  {stationCountLabel(building)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close building details"
-                className="rounded-full border border-[#d8cdea] bg-white p-2 text-[#4a3a66] transition hover:border-[#9c7ccc] hover:text-[#5a2c93] active:scale-95"
-              >
-                <X className="h-5 w-5" />
-              </button>
+  return (
+    <aside className="fixed top-0 left-0 z-[2000] h-full w-[min(26rem,92vw)] border-r border-[#d2c4e6] bg-white shadow-[0_18px_45px_-28px_rgba(67,26,124,0.7)]">
+      <div className="flex h-full flex-col">
+        <div className="border-b border-[#d8cdea] bg-gradient-to-b from-[#f6f0ff] to-white px-6 pt-6 pb-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#d8cdea] bg-white px-2.5 py-1 text-[10px] font-bold tracking-[0.18em] text-[#5a2c93] uppercase">
+                <MapPin className="h-3 w-3" />
+                Selected Building
+              </p>
+              <h2 className="font-display text-[1.75rem] leading-tight font-bold text-[#301a55]">
+                {building.name}
+              </h2>
+              <p className="mt-2 text-sm font-semibold text-[#4a3a66]">
+                {stationCountLabel(building)}
+              </p>
             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto pb-28">
-            <DispenserList building={building} />
-          </div>
-
-          <div className="absolute right-0 bottom-0 left-0 border-t border-[#d8cdea] bg-white p-5">
-            <DirectionsButton building={building} userLocation={userLocation} />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close building details"
+              className="rounded-full border border-[#d8cdea] bg-white p-2 text-[#4a3a66] transition hover:border-[#9c7ccc] hover:text-[#5a2c93] active:scale-95"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
-      </aside>
-    </>
+
+        <div className="flex-1 overflow-y-auto pb-28">
+          <DispenserList building={building} />
+        </div>
+
+        <div className="absolute right-0 bottom-0 left-0 border-t border-[#d8cdea] bg-white p-5">
+          <DirectionsButton building={building} userLocation={userLocation} />
+        </div>
+      </div>
+    </aside>
   );
 }

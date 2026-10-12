@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, ZoomControl } from "react-leaflet";
-import { DivIcon, type LatLngBoundsExpression, type Map as LeafletMap } from "leaflet";
+import { DivIcon, type Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { haversineDistanceMeters } from "@/lib/nearest";
 import type { Building, LatLng } from "@/lib/types";
@@ -55,12 +55,20 @@ function MapController({
   onMapReady: (map: LeafletMap) => void;
 }) {
   const map = useMap();
+  const lastHandledSelectionRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     onMapReady(map);
   }, [map, onMapReady]);
 
   useEffect(() => {
+    // Move the camera only when the selection changes, so location updates never
+    // drag the map back to the selected building while the user is panning.
+    if (lastHandledSelectionRef.current === selectedBuildingId) {
+      return;
+    }
+    lastHandledSelectionRef.current = selectedBuildingId;
+
     if (selectedBuildingId) {
       const selected = buildings.find((building) => building.id === selectedBuildingId);
       if (selected) {
@@ -91,6 +99,27 @@ function MapController({
   return null;
 }
 
+let currentLocationIcon: DivIcon | null = null;
+const buildingIconCache = new globalThis.Map<string, DivIcon>();
+
+// Icons are cached so re-renders hand react-leaflet the same instance and it skips
+// replacing the marker DOM (which would also restart the pulse animations).
+function getCurrentLocationIcon() {
+  currentLocationIcon ??= createCurrentLocationIcon();
+  return currentLocationIcon;
+}
+
+function getBuildingIcon(isSelected: boolean, isNearest: boolean) {
+  const key = `${isSelected}:${isNearest}`;
+  let icon = buildingIconCache.get(key);
+  if (!icon) {
+    icon = createIcon(isSelected, isNearest);
+    buildingIconCache.set(key, icon);
+  }
+
+  return icon;
+}
+
 function createCurrentLocationIcon() {
   return new DivIcon({
     className: "bg-transparent border-none",
@@ -114,6 +143,11 @@ function createIcon(isSelected: boolean, isNearest: boolean) {
   const ringColor = isSelected ? "#431A7C" : "#FFFFFF";
   const nearestRingColor = "rgba(13,148,136,0.95)";
   const nearestGlowColor = "rgba(13,148,136,0.3)";
+  // Only highlighted markers pulse; animating every marker is costly on phones.
+  const pulseRing =
+    isSelected || isNearest
+      ? `<span style="position:absolute;width:100%;height:100%;border-radius:9999px;background:${pulseColor};animation:markerPulse 1.8s ease-out infinite;"></span>`
+      : "";
   const nearestTag = isNearest
     ? `
       <span style="position:absolute;top:-18px;padding:2px 7px;border-radius:9999px;background:#0F766E;color:#ffffff;font-size:9px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;box-shadow:0 8px 14px -10px rgba(15,118,110,0.95);white-space:nowrap;">
@@ -134,7 +168,7 @@ function createIcon(isSelected: boolean, isNearest: boolean) {
       <div style="position:relative;display:flex;align-items:center;justify-content:center;width:44px;height:44px;">
         ${nearestTag}
         ${nearestOuterRing}
-        <span style="position:absolute;width:100%;height:100%;border-radius:9999px;background:${pulseColor};animation:markerPulse 1.8s ease-out infinite;"></span>
+        ${pulseRing}
         <span style="position:relative;width:${isSelected ? "22px" : isNearest ? "20px" : "17px"};height:${isSelected ? "22px" : isNearest ? "20px" : "17px"};border-radius:9999px;background:${dotColor};box-shadow:${isNearest ? "0 0 0 6px rgba(13,148,136,0.28)" : "0 10px 20px -12px rgba(67,26,124,0.9)"};border:${isSelected ? "4px" : "2px"} solid ${ringColor};transition:all 220ms ease;"></span>
       </div>
     `,
@@ -142,6 +176,33 @@ function createIcon(isSelected: boolean, isNearest: boolean) {
     iconAnchor: [22, 22],
   });
 }
+
+const BuildingMarker = memo(function BuildingMarker({
+  building,
+  isSelected,
+  isNearest,
+  onSelect,
+}: {
+  building: Building;
+  isSelected: boolean;
+  isNearest: boolean;
+  onSelect: (building: Building) => void;
+}) {
+  const eventHandlers = useMemo(
+    () => ({
+      click: () => onSelect(building),
+    }),
+    [building, onSelect]
+  );
+
+  return (
+    <Marker
+      position={[building.latitude, building.longitude]}
+      icon={getBuildingIcon(isSelected, isNearest)}
+      eventHandlers={eventHandlers}
+    />
+  );
+});
 
 export default function Map({
   buildings,
@@ -262,20 +323,19 @@ export default function Map({
         />
 
         {buildings.map((building) => (
-          <Marker
+          <BuildingMarker
             key={building.id}
-            position={[building.latitude, building.longitude]}
-            icon={createIcon(selectedBuildingId === building.id, nearestBuildingId === building.id)}
-            eventHandlers={{
-              click: () => onBuildingSelect(building),
-            }}
+            building={building}
+            isSelected={selectedBuildingId === building.id}
+            isNearest={nearestBuildingId === building.id}
+            onSelect={onBuildingSelect}
           />
         ))}
 
         {userLocation && (
           <Marker
             position={[userLocation.lat, userLocation.lng]}
-            icon={createCurrentLocationIcon()}
+            icon={getCurrentLocationIcon()}
             interactive={false}
           />
         )}
